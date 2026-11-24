@@ -532,7 +532,7 @@ th{color:var(--ink);font-weight:800}
 /* === 2. STORAGE & COMPATIBILITY WITH EXISTING GITHUB USERS === */
 const KEY='catatan-si-kecil-v1';
 let mem=null;
-const num=s=>{const v=parseFloat(String(s==null?'':s).trim().replace(',','.'));return isNaN(v)?0:v};
+const num=s=>{const v=parseFloat(String(s==null?'':s).trim().replace(',','.'));return isNaN(v)||v<0?0:v};
 const kg=s=>{const v=num(s);return v>=100?Math.round(v)/1000:v};
 
 function normalizeDB(raw){
@@ -597,7 +597,7 @@ let diExp=false,resetConfirm=false;
 
 const growthSorted=()=>db.growth.slice().sort((a,b)=>a.d<b.d?-1:1);
 function lastW(){const g=growthSorted().filter(x=>x.w);return g.length?g[g.length-1].w:kg(db.baby.bw)}
-function target(){return +db.baby.target||(lastW()?Math.round(lastW()*150):0)}
+function target(){const t=num(db.baby.target);return t>0?Math.round(t):(lastW()?Math.round(lastW()*150):0)}
 function age(){
   const b=db.baby.dob;if(!b)return'';
   const a=new Date(b+'T00:00'),t=new Date();
@@ -720,6 +720,7 @@ function periodBar(k){
 function openPick(k){sh={t:'p',k};drawSheet()}
 function go(t){
   tab=t;resetConfirm=false;diExp=false;
+  syncToday(true);
   const di=$('#di');if(di)di.classList.remove('exp');
   render();scrollTo(0,0);
   document.body.classList.remove('is-scrolled');
@@ -828,7 +829,7 @@ function add(kind,ml){
   ml=+ml;if(!(ml>0)){toast('Isi jumlah ml dulu');return}
   const d=db.logs[cur]||(db.logs[cur]={milk:[],pump:[]});
   const prevMilk=sum(d.milk),tg=target();
-  d.tg=tg;
+  if(!d.tg||cur===iso(new Date()))d.tg=tg;
   const tVal=curT();
   (d[kind]=d[kind]||[]).push({id:Date.now()+'-'+Math.random(),t:tVal,ml});
   save();render();
@@ -878,7 +879,7 @@ function vTips(){
   return `<section class="card sun"><h2>💡 Saran</h2>${T.map(x=>`<div class="tip"><span>${x[0]}</span><span>${x[1]}</span></div>`).join('')}<div class="mut" style="font-size:12px;margin-top:8px">Saran umum, bukan pengganti dokter atau bidan.</div></section>`;
 }
 function vToday(){
-  return `<div class="dt-row two"><div class="grow">${dateShell({id:'cur-d',val:cur,max:iso(new Date()),cls:'sun',ico:'📅',onchg:"if(this.value){cur=this.value;render()}"})}</div><div class="grow"><div class="picker-shell mint" onclick="openTime()"><span class="p-val"><span class="p-ico">⏰</span><span id="tm-now">${fmtTime(curT())}</span></span><span class="p-chev">▾</span></div></div></div>`
+  return `<div class="dt-row two"><div class="grow">${dateShell({id:'cur-d',val:cur,max:iso(new Date()),cls:'sun',ico:'📅',onchg:"if(this.value){cur=this.value;tmSel=null;render()}"})}</div><div class="grow"><div class="picker-shell mint" onclick="openTime()"><span class="p-val"><span class="p-ico">⏰</span><span id="tm-now">${fmtTime(curT())}</span></span><span class="p-chev">▾</span></div></div></div>`
   +entry('milk','🍼 Susu',[60,90,120,150],'milk')
   +entry('pump','💧 Pumping ASI',[50,80,100,150],'pump')
   +vTips();
@@ -1185,7 +1186,7 @@ function saveP(){
     dob:$('#pd').value,
     sex:$('#ps').value,
     bw:kg($('#pb').value)||'',
-    target:$('#pt').value,
+    target:num($('#pt').value)>0?String(Math.round(num($('#pt').value))):'',
     photo:db.baby.photo||''
   };
   save();render();toast('Profil tersimpan');
@@ -1220,6 +1221,7 @@ function wipeAll(){
   db={baby:{},logs:{},growth:[]};
   mem=db;
   resetConfirm=false;
+  snz={m:0,p:0,t:0};
   try{localStorage.removeItem(KEY)}catch(e){}
   save();render();toast('Semua data telah dihapus');
 }
@@ -1306,6 +1308,40 @@ function updateDynamicIsland(){
 }
 
 /* === 9. ALERTS, RENDER & THEME === */
+const ALERT_MSGS={
+  m:[
+    'ayang, dede belum di susuin, kasian dede',
+    'ayang, udah waktunya dede minum susu nih, kasian nanti haus',
+    'ayang, dede udah nungguin susu tuh, yuk disusuin dulu',
+    'halo ayang, jangan lupa susuin dede ya, udah 4 jam nih',
+    'ayang, perut dede udah bunyi tuh, kasih susu dulu yuk',
+    'dede kangen susu nih ayang, buruan disusuin ya'
+  ],
+  p:[
+    'ayang, pumping dulu sana!',
+    'ayang, udah waktunya pumping nih, yuk pumping dulu',
+    'jangan mager ayang, pumping dulu sana biar stok aman',
+    'ayang, jadwal pumping nih, semangat ya pumpingnya!',
+    'halo ayang, udah 4 jam nih, yuk pumping dulu sebentar',
+    'ayang, pumping dulu yuk biar ga penuh dan dede makin makmur'
+  ],
+  t:[
+    'ayang, dede susunya belum capai target, kasih susu dede dulu',
+    'ayang, target susu dede hari ini masih kurang nih, yuk kejar dulu',
+    'dikit lagi target susu dede tercapai ayang, kasih susu lagi yuk',
+    'ayang, udah sore nih tapi susu dede belum nyampe target, susuin lagi ya',
+    'yuk ayang, tambahin lagi susu dede biar target hari ini tembus',
+    'ayang, kasian dede target susunya belum penuh hari ini, kasih susu dulu ya'
+  ]
+};
+const msgSeed=Math.floor(Math.random()*100);
+function pickMsg(k,nt){
+  const arr=ALERT_MSGS[k]||[];
+  if(!arr.length)return '';
+  const idx=(Math.floor(nt/420000)+msgSeed)%arr.length;
+  return arr[idx];
+}
+
 let snz={m:0,p:0,t:0},alHTML='';
 function snoozeAlert(k){snz[k]=Date.now()+(k==='t'?2:4)*36e5;render()}
 function vAlerts(){
@@ -1319,29 +1355,45 @@ function vAlerts(){
     });
     return last;
   };
-  const row=(k,txt)=>`<div class="alert"><span class="ai">⚠️</span><div class="mq"><div class="mq-t" style="animation-duration:${Math.max(10,Math.round(txt.length*.22))}s"><span>${txt}</span><span>${txt}</span></div></div><button type="button" aria-label="Tutup" onclick="snoozeAlert('${k}')">✕</button></div>`;
+  const row=(k,txt)=>`<div class="alert"><span class="ai">⚠️</span><div class="mq"><div class="mq-t" style="animation-duration:${Math.max(10,Math.round(txt.length*.22))}s"><span>${esc(txt)}</span><span>${esc(txt)}</span></div></div><button type="button" aria-label="Tutup" onclick="snoozeAlert('${k}')">✕</button></div>`;
 
   const lastMilk=lastTs('milk');
   const dueMilk=lastMilk?(nt-lastMilk>=4*36e5):(now.getHours()>=7);
-  if(dueMilk&&nt>=snz.m)out.push(row('m','ayang, dede belum di susuin, kasian dede'));
+  if(dueMilk&&nt>=snz.m)out.push(row('m',pickMsg('m',nt)));
 
   const lastPump=lastTs('pump');
-  if(lastPump&&nt-lastPump>=4*36e5&&nt>=snz.p)out.push(row('p','ayang, pumping dulu sana!'));
+  if(lastPump&&nt-lastPump>=4*36e5&&nt>=snz.p)out.push(row('p',pickMsg('p',nt)));
 
   const L=db.logs[td]||{},tg=target(),tot=sum(L.milk||[]);
-  if(now.getHours()>=18&&tg>0&&tot<tg&&nt>=snz.t)out.push(row('t','ayang, dede susunya belum capai target, kasih susu dede dulu'));
+  if(now.getHours()>=18&&tg>0&&tot<tg&&nt>=snz.t)out.push(row('t',pickMsg('t',nt)));
   return out.join('');
 }
 let lastToday=iso(new Date());
-function refreshAlerts(){
+function syncToday(force){
   const tn=iso(new Date());
-  if(tn!==lastToday){if(cur===lastToday)cur=tn;lastToday=tn;render();return}
+  if(tn!==lastToday){
+    cur=tn;gdVal=tn;rm=tn.slice(0,7);ry=tn.slice(0,4);tmSel=null;lastToday=tn;
+    return true;
+  }
+  if(force&&(cur!==tn||gdVal!==tn||tmSel!==null)){
+    cur=tn;gdVal=tn;tmSel=null;
+    return true;
+  }
+  return false;
+}
+function refreshAlerts(){
+  if(syncToday(false)){render();return}
   const e=$('#alerts');if(!e)return;
   const h=vAlerts();
   if(h!==alHTML){alHTML=h;e.innerHTML=h}
 }
+function onResume(){
+  if(syncToday(true))render();
+  else refreshAlerts();
+}
 setInterval(refreshAlerts,30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAlerts()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)onResume()});
+window.addEventListener('pageshow',e=>{if(e.persisted)onResume()});
 
 function render(){
   updateDynamicIsland();
