@@ -314,6 +314,8 @@ label{display:block;font-weight:800;font-size:12.5px;margin:8px 0 4px;color:var(
   opacity:0;margin:0;padding:0;border:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none;
 }
 
+.tp-col{position:relative;display:grid;gap:6px;max-height:224px;overflow-y:auto;padding:2px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.tp-col .pc{padding:0;min-height:40px}
 .dt-row{display:flex;align-items:center;gap:8px;min-width:0}
 .dt-row .grow{flex:1;min-width:0}
 .dt-row.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
@@ -586,6 +588,11 @@ const sum=a=>(a||[]).reduce((s,x)=>s+(+x.ml||0),0);
 
 let cur=iso(new Date()),tab='today',rk='m',rm=cur.slice(0,7),ry=cur.slice(0,4);
 let gdVal=iso(new Date());
+let tmSel=null; /* jam manual (null = pakai jam sekarang) */
+function curT(){
+  if(tmSel&&!(cur===iso(new Date())&&tmSel>nowT()))return tmSel;
+  tmSel=null;return nowT();
+}
 let diExp=false,resetConfirm=false;
 
 const growthSorted=()=>db.growth.slice().sort((a,b)=>a.d<b.d?-1:1);
@@ -608,7 +615,7 @@ function toast(t){
 function shift(k,d){const x=new Date(k+'T00:00');x.setDate(x.getDate()+d);return iso(x)}
 
 /* === LIVE CLOCK REFRESH EVERY 15S === */
-setInterval(()=>{const e=$('#tm-now');if(e)e.textContent=fmtTime(nowT())},15000);
+setInterval(()=>{const e=$('#tm-now');if(e&&!tmSel)e.textContent=fmtTime(nowT())},15000);
 
 /* === CUSTOM CALENDAR & PERIOD SHEET === */
 let sh=null;
@@ -631,7 +638,45 @@ function pickDate(d){
   const el=$('#'+sh.id);if(!el)return;
   el.value=d;closeSheet();el.dispatchEvent(new Event('change'));
 }
+function openTime(){
+  const t=curT().split(':').map(Number);
+  sh={t:'t',h:t[0],m:t[1]};drawSheet();
+}
+function tpLimit(){
+  const today=cur===iso(new Date()),d=new Date();
+  return today?{h:d.getHours(),m:d.getMinutes()}:{h:23,m:59};
+}
+function setTH(h){
+  const L=tpLimit();sh.h=h;
+  if(h===L.h&&sh.m>L.m)sh.m=L.m;
+  drawSheet();
+}
+function setTM(m){sh.m=m;drawSheet()}
+function applyTime(){
+  const p=x=>String(x).padStart(2,'0');
+  tmSel=p(sh.h)+':'+p(sh.m);closeSheet();render();toast('Jam diatur '+fmtTime(tmSel));
+}
+function resetTime(){tmSel=null;closeSheet();render();toast('Kembali ke jam sekarang')}
+function drawTime(){
+  let e=$('#sheet');
+  const old=e?[...e.querySelectorAll('.tp-col')].map(c=>c.scrollTop):null;
+  if(!e){e=document.createElement('div');e.id='sheet';e.className='sheet-bg';e.onclick=closeSheet;document.body.appendChild(e)}
+  const p=x=>String(x).padStart(2,'0'),L=tpLimit();
+  const hs=Array.from({length:24},(_,i)=>`<button type="button" class="pc ${i===sh.h?'on':''}" ${i>L.h?'disabled':''} onclick="setTH(${i})">${p(i)}</button>`).join('');
+  const ms=Array.from({length:60},(_,i)=>`<button type="button" class="pc ${i===sh.m?'on':''}" ${(sh.h===L.h&&i>L.m)?'disabled':''} onclick="setTM(${i})">${p(i)}</button>`).join('');
+  e.innerHTML=`<div class="sheet" onclick="event.stopPropagation()"><div class="sh-t" style="text-align:center">Pilih jam &nbsp; <b>${p(sh.h)}.${p(sh.m)}</b></div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+    <div><div class="mut" style="text-align:center;font-weight:800;font-size:12px;margin-bottom:4px">Jam</div><div class="tp-col">${hs}</div></div>
+    <div><div class="mut" style="text-align:center;font-weight:800;font-size:12px;margin-bottom:4px">Menit</div><div class="tp-col">${ms}</div></div>
+  </div>
+  <div class="row" style="margin-top:12px"><button class="btn alt" type="button" onclick="resetTime()">Jam sekarang</button><button class="btn" type="button" onclick="applyTime()">Pilih</button></div></div>`;
+  [...e.querySelectorAll('.tp-col')].forEach((c,i)=>{
+    if(old&&old[i]!=null&&old.length===2)c.scrollTop=old[i];
+    else{const on=c.querySelector('.on');if(on)c.scrollTop=Math.max(0,on.offsetTop-90)}
+  });
+}
 function drawSheet(){
+  if(sh&&sh.t==='t'){drawTime();return}
   let e=$('#sheet');
   if(!e){e=document.createElement('div');e.id='sheet';e.className='sheet-bg';e.onclick=closeSheet;document.body.appendChild(e)}
   const p2=x=>String(x).padStart(2,'0');let h='';
@@ -784,7 +829,7 @@ function add(kind,ml){
   const d=db.logs[cur]||(db.logs[cur]={milk:[],pump:[]});
   const prevMilk=sum(d.milk),tg=target();
   d.tg=tg;
-  const tVal=nowT();
+  const tVal=curT();
   (d[kind]=d[kind]||[]).push({id:Date.now()+'-'+Math.random(),t:tVal,ml});
   save();render();
   const nowMilk=sum(d.milk);
@@ -833,7 +878,7 @@ function vTips(){
   return `<section class="card sun"><h2>💡 Saran</h2>${T.map(x=>`<div class="tip"><span>${x[0]}</span><span>${x[1]}</span></div>`).join('')}<div class="mut" style="font-size:12px;margin-top:8px">Saran umum, bukan pengganti dokter atau bidan.</div></section>`;
 }
 function vToday(){
-  return `<div class="dt-row two"><div class="grow">${dateShell({id:'cur-d',val:cur,max:iso(new Date()),cls:'sun',ico:'📅',onchg:"if(this.value){cur=this.value;render()}"})}</div><div class="grow"><div class="picker-shell mint" style="cursor:default"><span class="p-val"><span class="p-ico">⏰</span><span id="tm-now">${fmtTime(nowT())}</span></span></div></div></div>`
+  return `<div class="dt-row two"><div class="grow">${dateShell({id:'cur-d',val:cur,max:iso(new Date()),cls:'sun',ico:'📅',onchg:"if(this.value){cur=this.value;render()}"})}</div><div class="grow"><div class="picker-shell mint" onclick="openTime()"><span class="p-val"><span class="p-ico">⏰</span><span id="tm-now">${fmtTime(curT())}</span></span><span class="p-chev">▾</span></div></div></div>`
   +entry('milk','🍼 Susu',[60,90,120,150],'milk')
   +entry('pump','💧 Pumping ASI',[50,80,100,150],'pump')
   +vTips();
