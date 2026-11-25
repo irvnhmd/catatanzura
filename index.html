@@ -1492,10 +1492,10 @@ function vProfil(){
   <label>Gemini API Key (opsional untuk Analisis Rekap)</label>
   <div id="gk-wrap">
     ${((b.geminiKey||'').trim()&&!editingGeminiKey)
-      ?`<div class="row" style="margin-top:4px">
-          <div style="flex:1;min-height:44px;padding:8px 12px;border-radius:15px;border:2px solid var(--mint-b);background:var(--card);color:var(--ok);font:800 14px Nunito,sans-serif;display:flex;align-items:center;gap:6px">✅ API Key tersimpan</div>
-          <button class="btn alt" type="button" onclick="openEditGeminiKey()">Ubah</button>
-          <button class="btn danger" type="button" style="min-width:0;padding:8px 12px" onclick="clearGeminiKey()">Hapus</button>
+      ?`<div class="row" style="margin-top:4px;align-items:stretch">
+          <div style="flex:1;min-width:0;min-height:42px;padding:0 12px;border-radius:15px;border:2px solid var(--mint-b);background:var(--card);color:var(--ok);font:800 13.5px/1.2 Nunito,sans-serif;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="flex:none">✅</span><span style="overflow:hidden;text-overflow:ellipsis">API Key tersimpan</span></div>
+          <button class="btn alt" type="button" style="min-width:0;padding:0 13px;height:42px;min-height:42px;font-size:13.5px;flex:none" onclick="openEditGeminiKey()">Ubah</button>
+          <button class="btn danger" type="button" style="min-width:0;padding:0 13px;height:42px;min-height:42px;font-size:13.5px;flex:none" onclick="clearGeminiKey()">Hapus</button>
         </div>`
       :`<input id="pgk" type="password" value="" placeholder="AIzaSy...">`
     }
@@ -1507,8 +1507,9 @@ function vProfil(){
   <div class="row" style="margin-bottom:8px">
     <button class="btn alt" type="button" style="flex:1" onclick="exportJSON()">⬇️ Cadangkan</button>
     <button class="btn alt" type="button" style="flex:1" onclick="$('#f-json').click()">⬆️ Pulihkan</button>
-    <input id="f-json" type="file" accept=".json,application/json" style="display:none" onchange="importJSON(this)">
+    <input id="f-json" type="file" accept="*/*" style="display:none" onchange="importJSON(this)">
   </div>
+  <button class="btn alt" type="button" style="width:100%;min-height:36px;font-size:12.5px;margin-bottom:8px" onclick="openPasteJSONSheet()">📋 Tempel Teks JSON Manual</button>
   ${resetConfirm
     ?`<div class="row"><button class="btn alt" type="button" style="flex:1" onclick="const d=captureProfilDraft();resetConfirm=false;renderKeepScroll();restoreProfilDraft(d)">Batal</button><button class="btn danger" type="button" style="flex:1" onclick="wipeAll()">Ya, Hapus Semua</button></div>`
     :`<button class="btn danger" type="button" style="width:100%;min-height:38px;font-size:13px" onclick="const d=captureProfilDraft();resetConfirm=true;renderKeepScroll();restoreProfilDraft(d)">🗑️ Hapus Semua Data</button>`
@@ -1598,30 +1599,75 @@ function exportJSON(){
     toast('Cadangan diunduh');
   }catch(e){toast('Gagal mengunduh cadangan')}
 }
-function importJSON(inp){
-  const f=inp.files&&inp.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
+function applyImportedJSONText(rawText){
+  const cleaned=String(rawText||'').replace(/^\uFEFF/,'').trim();
+  if(!cleaned)throw new Error('empty_file');
+  const o=JSON.parse(cleaned);
+  if(!o||typeof o!=='object'||(!o.logs&&!o.baby&&!o.growth))throw new Error('invalid_schema');
+  const hasExisting=Object.keys(db.logs||{}).length>0||(db.growth||[]).length>0||Boolean((db.baby||{}).name);
+  if(hasExisting){
     try{
-      const o=JSON.parse(r.result);
-      if(!o||typeof o!=='object'||(!o.logs&&!o.baby&&!o.growth))throw 0;
-      const hasExisting=Object.keys(db.logs||{}).length>0||(db.growth||[]).length>0||Boolean((db.baby||{}).name);
-      if(hasExisting&&!window.confirm('Pulihkan data dari file ini? Data yang ada di perangkat saat ini akan diganti.')){
-        inp.value='';
-        return;
-      }
-      db=normalizeDB(o);
-      selP=null;selF='';
-      editingGeminiKey=false;
-      resetConfirm=false;
-      snz={m:0,p:0,t:0};
-      alertAiCache={};
-      aiState={loading:false,period:'',text:'',err:'',openKey:false};
-      save();renderKeepScroll();toast('Data berhasil dipulihkan');
-    }catch(e){toast('File cadangan tidak valid')}
-    inp.value='';
-  };
-  r.readAsText(f);
+      if(!window.confirm('Pulihkan data dari file ini? Data yang ada di perangkat saat ini akan diganti.'))return false;
+    }catch(_){}
+  }
+  db=normalizeDB(o);
+  selP=null;selF='';
+  editingGeminiKey=false;
+  resetConfirm=false;
+  snz={m:0,p:0,t:0};
+  alertAiCache={};
+  aiState={loading:false,period:'',text:'',err:'',openKey:false};
+  save();renderKeepScroll();toast('Data berhasil dipulihkan');
+  return true;
+}
+
+async function importJSON(inp){
+  const f=inp&&inp.files&&inp.files[0];
+  if(inp)inp.value='';
+  if(!f)return;
+  try{
+    let rawText='';
+    if(typeof f.text==='function'){
+      rawText=await f.text();
+    }
+    if(!rawText){
+      rawText=await new Promise((resolve,reject)=>{
+        const r=new FileReader();
+        r.onload=()=>resolve(String(r.result||''));
+        r.onerror=()=>reject(new Error('read_error'));
+        r.readAsText(f);
+      });
+    }
+    applyImportedJSONText(rawText);
+  }catch(_){
+    toast('Gagal baca file di browser ini. Coba tempel teks JSON.');
+    openPasteJSONSheet();
+  }
+}
+
+function openPasteJSONSheet(){
+  let e=$('#sheet');
+  if(!e){e=document.createElement('div');e.id='sheet';e.className='sheet-bg';e.onclick=closeSheet;document.body.appendChild(e)}
+  e.innerHTML=`<div class="sheet" onclick="event.stopPropagation()">
+    <div class="sh-t">Tempel isi file JSON cadangan</div>
+    <p class="mut" style="margin:0 0 8px;font-size:12px">Buka file <b>.json</b> di aplikasi File/Catatan, salin seluruh isinya, lalu tempel di bawah ini.</p>
+    <textarea id="paste-json-area" rows="7" placeholder='{"baby":...,"logs":...,"growth":...}' style="font-size:13px"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn alt" type="button" onclick="closeSheet()">Batal</button>
+      <button class="btn" type="button" onclick="submitPastedJSON()">Pulihkan</button>
+    </div>
+  </div>`;
+}
+
+function submitPastedJSON(){
+  const ta=$('#paste-json-area');
+  const txt=ta?ta.value:'';
+  try{
+    const ok=applyImportedJSONText(txt);
+    if(ok!==false)closeSheet();
+  }catch(_){
+    toast('Format JSON tidak valid');
+  }
 }
 function wipeAll(){
   db={baby:{},logs:{},growth:[]};
