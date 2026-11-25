@@ -2,7 +2,7 @@
 <html lang="id" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Si Kecil">
@@ -139,15 +139,9 @@ body.is-scrolled .top-blur,body.is-scrolled .bot-blur{
 .di-av{
   width:38px;height:38px;border-radius:50%;flex:none;
   background:var(--card);border:2px solid var(--pink-b);
-  display:flex;align-items:center;justify-content:center;font-size:20px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;
 }
 .di.compact .di-av{width:30px;height:30px;font-size:17px}
-.di-av{overflow:hidden}
-.di-av img{width:100%;height:100%;object-fit:cover;display:block}
-.ph-prev{width:64px;height:64px;border-radius:50%;overflow:hidden;border:2.5px solid var(--pink-b);background:var(--card);display:flex;align-items:center;justify-content:center;font-size:30px;flex:none}
-.ph-prev img{width:100%;height:100%;object-fit:cover;display:block}
-.ph-btns{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
-.ph-btns .btn{min-width:0;min-height:38px;font-size:13px;padding:6px 12px}
 .di-txt{min-width:0;flex:1;line-height:1.18}
 .di-nm{font-family:Fredoka,sans-serif;font-size:18px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .di.compact .di-nm{font-size:15px}
@@ -176,7 +170,7 @@ body.is-scrolled .top-blur,body.is-scrolled .bot-blur{
 .di-box small{display:block;font-size:10.5px;color:var(--mut);font-weight:800}
 .di-box b{font-family:Fredoka,sans-serif;font-size:13px;color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* === BOTTOM NAVIGATION: PIL TRANSPARAN, MENGECIL SAAT SCROLL TURUN & MEMBESAR SAAT SCROLL NAIK === */
+/* === BOTTOM NAVIGATION === */
 .nav-wrap{
   position:fixed;left:0;right:0;bottom:0;z-index:35;
   display:flex;justify-content:center;
@@ -250,7 +244,7 @@ nav.shrunk button em{max-height:0;opacity:0}
 @keyframes barMove{from{background-position:0 0}to{background-position:28px 0}}
 .ok-t{color:var(--ok);font-weight:800}
 
-.chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0}
+.chips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:8px 0}
 .chip,.btn{
   font:800 14.5px Nunito,sans-serif;border:0;border-radius:999px;
   padding:8px 12px;min-height:42px;cursor:pointer;
@@ -271,8 +265,8 @@ nav.shrunk button em{max-height:0;opacity:0}
 
 .row{display:flex;gap:8px;align-items:center;min-width:0}
 .row .btn{min-width:104px}
-input[type=text],input[type=number],select,textarea{
-  font:700 16px Nunito,sans-serif;width:100%;min-height:44px;padding:8px 12px;
+input[type=text],input[type=number],input[type=password],select,textarea{
+  font:700 16px Nunito,sans-serif;font-size:16px;width:100%;min-height:44px;padding:8px 12px;
   border-radius:15px;border:2px solid var(--line);background:var(--card);color:var(--ink);
   min-width:0;max-width:100%;display:block;
 }
@@ -529,15 +523,20 @@ th{color:var(--ink);font-weight:800}
   }catch(e){}
 })();
 
-/* === 2. STORAGE & COMPATIBILITY WITH EXISTING GITHUB USERS === */
+/* === 2. STORAGE, STATE & HELPERS === */
 const KEY='catatan-si-kecil-v1';
 let mem=null;
+let snz={m:0,p:0,t:0},alHTML='';
+
 const num=s=>{const v=parseFloat(String(s==null?'':s).trim().replace(',','.'));return isNaN(v)||v<0?0:v};
 const kg=s=>{const v=num(s);return v>=100?Math.round(v)/1000:v};
+const fmtDec=v=>v?String(v).replace('.',','):'–';
 
 function normalizeDB(raw){
   if(!raw||typeof raw!=='object')return {baby:{},logs:{},growth:[]};
   const baby=raw.baby&&typeof raw.baby==='object'?{...raw.baby}:{};
+  delete baby.photo;
+  if(typeof baby.geminiKey!=='string')baby.geminiKey='';
   const logs={};
   if(raw.logs&&typeof raw.logs==='object'){
     Object.keys(raw.logs).forEach(k=>{
@@ -588,19 +587,27 @@ const sum=a=>(a||[]).reduce((s,x)=>s+(+x.ml||0),0);
 
 let cur=iso(new Date()),tab='today',rk='m',rm=cur.slice(0,7),ry=cur.slice(0,4);
 let gdVal=iso(new Date());
-let tmSel=null; /* jam manual (null = pakai jam sekarang) */
+let tmSel=null;
 function curT(){
   if(tmSel&&!(cur===iso(new Date())&&tmSel>nowT()))return tmSel;
   tmSel=null;return nowT();
 }
 let diExp=false,resetConfirm=false;
 
-const growthSorted=()=>db.growth.slice().sort((a,b)=>a.d<b.d?-1:1);
+function renderKeepScroll(fn){
+  const y=window.scrollY;
+  if(fn)fn();
+  render();
+  requestAnimationFrame(()=>window.scrollTo(0,y));
+}
+
+const growthSorted=()=>db.growth.slice().sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:String(a.id).localeCompare(String(b.id)));
 function lastW(){const g=growthSorted().filter(x=>x.w);return g.length?g[g.length-1].w:kg(db.baby.bw)}
 function target(){const t=num(db.baby.target);return t>0?Math.round(t):(lastW()?Math.round(lastW()*150):0)}
 function age(){
   const b=db.baby.dob;if(!b)return'';
   const a=new Date(b+'T00:00'),t=new Date();
+  if(isNaN(a.getTime())||a>t)return'';
   let m=(t.getFullYear()-a.getFullYear())*12+t.getMonth()-a.getMonth(),d=t.getDate()-a.getDate();
   if(d<0){m--;d+=new Date(t.getFullYear(),t.getMonth(),0).getDate()}
   if(m<0)return'';
@@ -612,7 +619,6 @@ function toast(t){
   e.textContent=t;e.className='s';
   clearTimeout(e._t);e._t=setTimeout(()=>e.className='',1700);
 }
-function shift(k,d){const x=new Date(k+'T00:00');x.setDate(x.getDate()+d);return iso(x)}
 
 /* === LIVE CLOCK REFRESH EVERY 15S === */
 setInterval(()=>{const e=$('#tm-now');if(e&&!tmSel)e.textContent=fmtTime(nowT())},15000);
@@ -636,6 +642,8 @@ function calNav(d){
 }
 function pickDate(d){
   const el=$('#'+sh.id);if(!el)return;
+  const maxD=sh.max||el.dataset.max||iso(new Date());
+  if(d>maxD){toast('Tidak bisa memilih tanggal setelah hari ini');return}
   el.value=d;closeSheet();el.dispatchEvent(new Event('change'));
 }
 function openTime(){
@@ -654,9 +662,9 @@ function setTH(h){
 function setTM(m){sh.m=m;drawSheet()}
 function applyTime(){
   const p=x=>String(x).padStart(2,'0');
-  tmSel=p(sh.h)+':'+p(sh.m);closeSheet();render();toast('Jam diatur '+fmtTime(tmSel));
+  tmSel=p(sh.h)+':'+p(sh.m);closeSheet();renderKeepScroll();toast('Jam diatur '+fmtTime(tmSel));
 }
-function resetTime(){tmSel=null;closeSheet();render();toast('Kembali ke jam sekarang')}
+function resetTime(){tmSel=null;closeSheet();renderKeepScroll();toast('Kembali ke jam sekarang')}
 function drawTime(){
   let e=$('#sheet');
   const old=e?[...e.querySelectorAll('.tp-col')].map(c=>c.scrollTop):null;
@@ -697,24 +705,30 @@ function drawSheet(){
     }
   }else if(sh.t==='p'){
     const g='style="grid-template-columns:repeat(3,minmax(0,1fr))"';
+    const curRm=/^\d{4}-\d{2}$/.test(rm)?rm:iso(new Date()).slice(0,7);
+    const curRy=/^\d{4}$/.test(ry)?ry:iso(new Date()).slice(0,4);
     if(sh.k==='mo'){
       h=`<div class="sh-t">Pilih bulan</div><div class="mgrid" ${g}>${MONTHS.map((x,i)=>{
         const mm=String(i+1).padStart(2,'0');
-        return `<button type="button" class="pc ${rm.slice(5)===mm?'on':''}" onclick="rm=rm.slice(0,4)+'-${mm}';closeSheet();render()">${x}</button>`;
+        return `<button type="button" class="pc ${curRm.slice(5)===mm?'on':''}" onclick="rm='${curRm.slice(0,4)}-${mm}';closeSheet();renderKeepScroll()">${x}</button>`;
       }).join('')}</div>`;
     }else{
-      const cu=sh.k==='m'?rm.slice(0,4):ry;
-      h=`<div class="sh-t">Pilih tahun</div><div class="mgrid ygrid" ${g}>${Array.from({length:31},(_,i)=>String(2020+i)).map(y=>`<button type="button" class="pc ${y===cu?'on':''}" onclick="${sh.k==='m'?`rm='${y}-'+rm.slice(5)`:`ry='${y}'`};closeSheet();render()">${y}</button>`).join('')}</div>`;
+      const cu=sh.k==='m'?curRm.slice(0,4):curRy;
+      h=`<div class="sh-t">Pilih tahun</div><div class="mgrid ygrid" ${g}>${Array.from({length:31},(_,i)=>String(2020+i)).map(y=>`<button type="button" class="pc ${y===cu?'on':''}" onclick="${sh.k==='m'?`rm='${y}-${curRm.slice(5)}'`:`ry='${y}'`};closeSheet();renderKeepScroll()">${y}</button>`).join('')}</div>`;
     }
   }
   e.innerHTML=`<div class="sheet" onclick="event.stopPropagation()">${h}</div>`;
   const yo=e.querySelector('.ygrid .on');if(yo)e.querySelector('.sheet').scrollTop=yo.offsetTop-90;
 }
 function periodBar(k){
+  const nowIso=iso(new Date());
+  if(!/^\d{4}-\d{2}$/.test(rm))rm=nowIso.slice(0,7);
+  if(!/^\d{4}$/.test(ry))ry=nowIso.slice(0,4);
   const y=k==='m'?rm.slice(0,4):ry;
+  const mIdx=Math.max(0,Math.min(11,(+rm.slice(5)||1)-1));
   const pill=(c,t,w)=>`<div class="picker-shell ${c}" onclick="openPick('${w}')"><span class="p-val"><span class="p-ico">${CAL_ICO}</span><span>${t}</span></span><span class="p-chev">▾</span></div>`;
   return k==='m'
-    ?`<div class="dt-row two">${pill('sun',MONTHS[+rm.slice(5)-1],'mo')}${pill('lil',y,'m')}</div>`
+    ?`<div class="dt-row two">${pill('sun',MONTHS[mIdx],'mo')}${pill('lil',y,'m')}</div>`
     :`<div class="dt-row one">${pill('lil',y,'y')}</div>`;
 }
 function openPick(k){sh={t:'p',k};drawSheet()}
@@ -804,6 +818,7 @@ function fireConfetti(){
   }));
   let f=0;
   function tick(){
+    if(cv.width!==innerWidth||cv.height!==innerHeight){cv.width=innerWidth;cv.height=innerHeight}
     ctx.clearRect(0,0,cv.width,cv.height);
     ps.forEach(p=>{
       p.x+=p.vx;p.y+=p.vy;p.vy+=.08;p.rot+=p.vr;
@@ -826,52 +841,64 @@ function closeCeleb(){$('#celeb').classList.remove('show')}
 
 /* === 4. TAB HARIAN === */
 function add(kind,ml){
-  ml=+ml;if(!(ml>0)){toast('Isi jumlah ml dulu');return}
+  syncToday(false);
+  ml=num(ml);if(!(ml>0)){toast('Isi jumlah ml dulu');return}
+  ml=Math.round(ml);
   const d=db.logs[cur]||(db.logs[cur]={milk:[],pump:[]});
   const prevMilk=sum(d.milk),tg=target();
-  if(!d.tg||cur===iso(new Date()))d.tg=tg;
+  if(!d.tg&&tg>0)d.tg=tg;
   const tVal=curT();
-  (d[kind]=d[kind]||[]).push({id:Date.now()+'-'+Math.random(),t:tVal,ml});
-  save();render();
-  const nowMilk=sum(d.milk);
-  if(cur===iso(new Date())&&kind==='milk'&&tg>0&&prevMilk<tg&&nowMilk>=tg)triggerAchievement(nowMilk,tg);
-  else{playAdd(kind);animEm(kind);toast('Tersimpan: '+ml+' ml')}
+  (d[kind]=d[kind]||[]).push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),t:tVal,ml});
+  save();renderKeepScroll();
+  const nowMilk=sum(d.milk),dayTg=d.tg||tg;
+  if(cur===iso(new Date())&&kind==='milk'&&dayTg>0&&prevMilk<dayTg&&nowMilk>=dayTg)triggerAchievement(nowMilk,dayTg);
+  else{playAdd(kind);animEm(kind);toast('Tersimpan: '+n(ml)+' ml')}
 }
 function del(kind,id){
   const d=db.logs[cur];if(!d)return;
   d[kind]=(d[kind]||[]).filter(x=>String(x.id)!==String(id));
-  save();render();toast('Catatan dihapus');
+  save();renderKeepScroll();toast('Catatan dihapus');
 }
 
-function entry(kind,title,chips,cls){
-  const arr=((db.logs[cur]||{})[kind]||[]).slice().sort((a,b)=>a.t<b.t?-1:1),tot=sum(arr);
-  const ico=title.split(' ')[0];
-  const label=title.slice(title.indexOf(' ')+1);
+function entry(kind,ico,label,chips,cls){
+  const entryObj=db.logs[cur]||{};
+  const arr=(entryObj[kind]||[]).slice().sort((a,b)=>a.t<b.t?-1:1),tot=sum(arr);
+  const tg=cur===iso(new Date())?target():(entryObj.tg||target());
   let top='';
   if(kind==='milk'){
-    const tg=target(),p=tg?Math.min(100,tot/tg*100):0;
+    const p=tg?Math.min(100,tot/tg*100):0;
     top=`<div class="big">${n(tot)} <span class="mut">${tg?'/ '+n(tg)+' ml':'ml'}</span></div>`+(tg
       ?`<div class="bar ${tot>=tg?'ok':''}"><i style="width:${p}%"></i></div><div class="mut">${tot>=tg?'<span class="ok-t">🎉 Target tercapai ('+Math.round(tot/tg*100)+'%)!</span>':'Kurang '+n(tg-tot)+' ml lagi ('+Math.round(p)+'%)'}</div>`
       :`<div class="mut">Isi target atau berat badan di Profil.</div>`);
   }else top=`<div class="big">${n(tot)} <span class="mut">ml hari ini</span></div>`;
-  return `<section class="card ${cls}"><h2><span class="em em-${kind}${kind==='milk'&&target()>0&&tot>=target()?' loop':''}">${esc(ico)}</span><span style="font-size:21px;font-weight:700">${esc(label)}</span><span class="mut">${arr.length}x</span></h2>${top}
+  return `<section class="card ${cls}"><h2><span class="em em-${kind}${kind==='milk'&&tg>0&&tot>=tg?' loop':''}">${esc(ico)}</span><span style="font-size:21px;font-weight:700">${esc(label)}</span><span class="mut">${arr.length}x</span></h2>${top}
   <div class="chips">${chips.map(c=>`<button class="chip" type="button" onclick="add('${kind}',${c})">+${c}</button>`).join('')}</div>
   <div class="row"><input id="c-${kind}" type="number" inputmode="numeric" min="1" placeholder="ml lain" onkeydown="if(event.key==='Enter'){add('${kind}',this.value)}"><button class="btn" type="button" onclick="add('${kind}',$('#c-${kind}').value)">Tambah</button></div>
   ${arr.map(x=>`<div class="item"><span><b>${esc(fmtTime(x.t))}</b> &nbsp; ${n(x.ml)} ml</span><button type="button" aria-label="Hapus" onclick="del('${kind}','${esc(x.id)}')">✕</button></div>`).join('')}</section>`;
 }
 function vTips(){
-  const d=db.logs[cur]||{milk:[],pump:[]},tg=target(),tot=sum(d.milk),pm=sum(d.pump),T=[];
+  const entryObj=db.logs[cur]||{milk:[],pump:[]},tg=cur===iso(new Date())?target():(entryObj.tg||target()),tot=sum(entryObj.milk),pm=sum(entryObj.pump),T=[];
   const isToday=cur===iso(new Date()),m=db.baby.dob?ageM(cur):null;
-  if(tg>0&&tot<tg&&d.milk.length){const avg=Math.max(1,Math.round(tot/d.milk.length)),sisa=tg-tot;T.push(['🍼','Perkiraan '+Math.ceil(sisa/avg)+' kali minum lagi dengan takaran biasa ('+n(avg)+' ml).'])}
-  if(isToday&&d.milk.length){
-    const t=d.milk.map(x=>x.t).sort().pop().split(':').map(Number),now=new Date(),diff=now.getHours()*60+now.getMinutes()-(t[0]*60+t[1]);
+  if(tg>0&&tot<tg&&entryObj.milk.length){
+    const rawAvg=Math.round(tot/entryObj.milk.length);
+    const avg=Math.max(30,rawAvg);
+    const sisa=tg-tot;
+    const estCount=Math.ceil(sisa/avg);
+    const avgLabel=rawAvg<30?`takaran acuan ${n(avg)} ml`:`takaran rata-rata ${n(avg)} ml`;
+    T.push(['🍼',`Perkiraan ${estCount} kali minum lagi dengan ${avgLabel} (kurang ${n(sisa)} ml).`]);
+  }
+  if(isToday&&entryObj.milk.length){
+    const toMins=str=>{const p=String(str||'00:00').split(':').map(Number);return (p[0]||0)*60+(p[1]||0)};
+    const latestMins=Math.max(...entryObj.milk.map(x=>toMins(x.t)));
+    const now=new Date(),diff=now.getHours()*60+now.getMinutes()-latestMins;
     if(diff>=0){T.push(['⏰','Minum terakhir '+(diff>=60?Math.floor(diff/60)+' jam '+diff%60+' menit':diff+' menit')+' lalu.'])}
   }
-  if(pm>0&&tot>0)T.push(['💧','Pumping setara '+Math.round(pm/tot*100)+'% dari susu yang diminum hari ini.']);
-  if(m===null)T.push(['🎂','Isi tanggal lahir di Profil untuk mendapat saran sesuai usia.']);
-  else if(m>=0&&m<6)T.push(['🌱','Di bawah 6 bulan, ASI atau susu saja sudah cukup. Belum perlu air putih atau makanan tambahan.']);
-  else if(m>=6&&m<12)T.push(['🥣','Usia 6 bulan ke atas mulai bisa MPASI, sambil tetap lanjut ASI atau susu.']);
-  else if(m>=12)T.push(['🥛','ASI atau susu tetap dilanjutkan sampai 2 tahun, bersama makanan keluarga.']);
+  if(pm>0&&tot>0)T.push(['💧',`Volume pumping hari ini sebesar ${n(pm)} ml (${Math.round(pm/tot*100)}% dari susu yang tercatat diminum hari ini).`]);
+  if(m===null||m<0)T.push(['🎂','Isi tanggal lahir di Profil untuk mendapat saran sesuai usia.']);
+  else if(m<6)T.push(['🌱','Di bawah 6 bulan, ASI atau susu saja sudah cukup. Belum perlu air putih atau makanan tambahan.']);
+  else if(m<12)T.push(['🥣','Usia 6 bulan ke atas mulai bisa MPASI, sambil tetap lanjut ASI atau susu.']);
+  else if(m<=24)T.push(['🥛','ASI atau susu tetap dilanjutkan sampai 2 tahun, bersama makanan keluarga.']);
+  else T.push(['🍚','Usia di atas 2 tahun: fokus makanan keluarga bergizi seimbang serta susu sesuai kebutuhan.']);
   const g=lastOf('w');
   if(g){const days=Math.floor((new Date(iso(new Date())+'T00:00')-new Date(g.d+'T00:00'))/864e5);if(days>=30)T.push(['📏','Terakhir timbang '+days+' hari lalu. Catat berat dan panjang lagi di tab Tumbuh.'])}
   else T.push(['📏','Belum ada catatan pertumbuhan. Catat berat dan panjang di tab Tumbuh.']);
@@ -879,9 +906,10 @@ function vTips(){
   return `<section class="card sun"><h2>💡 Saran</h2>${T.map(x=>`<div class="tip"><span>${x[0]}</span><span>${x[1]}</span></div>`).join('')}<div class="mut" style="font-size:12px;margin-top:8px">Saran umum, bukan pengganti dokter atau bidan.</div></section>`;
 }
 function vToday(){
-  return `<div class="dt-row two"><div class="grow">${dateShell({id:'cur-d',val:cur,max:iso(new Date()),cls:'sun',ico:'📅',onchg:"if(this.value){cur=this.value;tmSel=null;render()}"})}</div><div class="grow"><div class="picker-shell mint" onclick="openTime()"><span class="p-val"><span class="p-ico">⏰</span><span id="tm-now">${fmtTime(curT())}</span></span><span class="p-chev">▾</span></div></div></div>`
-  +entry('milk','🍼 Susu',[60,90,120,150],'milk')
-  +entry('pump','💧 Pumping ASI',[50,80,100,150],'pump')
+  const presetMl=[60,70,80,90,100,110,120,130,140,150];
+  return `<div class="dt-row two"><div class="grow">${dateShell({id:'cur-d',val:cur,max:iso(new Date()),cls:'sun',ico:'📅',onchg:"if(this.value){cur=this.value;tmSel=null;renderKeepScroll()}"})}</div><div class="grow"><div class="picker-shell mint" onclick="openTime()"><span class="p-val"><span class="p-ico">⏰</span><span id="tm-now">${fmtTime(curT())}</span></span><span class="p-chev">▾</span></div></div></div>`
+  +entry('milk','🍼','Susu',presetMl,'milk')
+  +entry('pump','💧','Pumping ASI',presetMl,'pump')
   +vTips();
 }
 
@@ -896,12 +924,26 @@ c:{L:[S('32.1 35.1 36.9 38.3 39.4 40.3 41.0 41.7 42.2 42.6 43.0 43.4 43.6 43.9 4
  P:[S('31.7 34.3 36.0 37.2 38.2 39.0 39.7 40.4 40.9 41.3 41.7 42.0 42.3 42.6 42.9 43.1 43.3 43.5 43.6 43.8 44.0 44.1 44.3 44.4 44.6'),S('32.7 35.3 37.0 38.2 39.3 40.1 40.8 41.5 42.0 42.4 42.8 43.2 43.5 43.8 44.0 44.2 44.4 44.6 44.8 45.0 45.1 45.3 45.4 45.6 45.7'),S('33.9 36.5 38.3 39.5 40.6 41.5 42.2 42.8 43.4 43.8 44.2 44.6 44.9 45.2 45.4 45.7 45.9 46.1 46.2 46.4 46.6 46.7 46.9 47.0 47.2'),S('35.1 37.8 39.5 40.8 41.9 42.8 43.5 44.2 44.7 45.2 45.6 46.0 46.3 46.6 46.8 47.1 47.3 47.5 47.7 47.8 48.0 48.2 48.3 48.5 48.6'),S('36.1 38.8 40.5 41.9 43.0 43.9 44.6 45.3 45.9 46.3 46.8 47.1 47.5 47.7 48.0 48.2 48.5 48.7 48.8 49.0 49.2 49.4 49.5 49.7 49.8')]}};
 
 let gk='w',gr=0,selP=null,selF='';
-function selPt(id){if(selP===id&&selF===gk)selP=null;else{selP=id;selF=gk}render()}
+function selPt(id){if(selP===id&&selF===gk)selP=null;else{selP=id;selF=gk}renderKeepScroll()}
 const GK={w:{n:'Berat badan',s:'Berat',u:'kg'},h:{n:'Panjang badan',s:'Panjang',u:'cm'},c:{n:'Lingkar kepala',s:'Kepala',u:'cm'}};
-const ageM=d=>(new Date(d+'T00:00')-new Date(db.baby.dob+'T00:00'))/864e5/30.4375;
+function calDiff(d1,d2){
+  if(!d1||!d2)return null;
+  const a=new Date(d1+'T00:00'),b=new Date(d2+'T00:00');
+  if(isNaN(a.getTime())||isNaN(b.getTime())||b<a)return null;
+  let m=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth();
+  let day=b.getDate()-a.getDate();
+  if(day<0){m--;day+=new Date(b.getFullYear(),b.getMonth(),0).getDate()}
+  return{m,day};
+}
+const ageM=d=>{
+  const c=calDiff(db.baby.dob,d);
+  if(!c)return -1;
+  return c.m+c.day/30.4375;
+};
 
 function bandDetail(cs,v,m,sexLabel,metricName){
-  const i=Math.max(0,Math.min(23,Math.floor(m))),t=m-i,ref=cs.map(a=>a[i]+(a[i+1]-a[i])*t);
+  const mc=Math.max(0,Math.min(24,m));
+  const i=Math.max(0,Math.min(23,Math.floor(mc))),t=mc-i,ref=cs.map(a=>a[i]+(a[i+1]-a[i])*t);
   let k=0;while(k<5&&v>=ref[k])k++;
   const sxTxt=sexLabel.toLowerCase();
   if(k===2||k===3)return{badge:{t:'✅ NORMAL (Ideal)',c:'ok'},desc:`<b>Normal & ideal!</b> ${metricName} si kecil sesuai standar usia bayi <b>${sxTxt}</b>.`};
@@ -912,15 +954,25 @@ function bandDetail(cs,v,m,sexLabel,metricName){
 }
 
 const nice=x=>{const e=Math.pow(10,Math.floor(Math.log10(x))),q=x/e;return(q<=1?1:q<=2?2:q<=2.5?2.5:q<=5?5:10)*e};
-const lastOf=f=>{const g=growthSorted().filter(x=>x[f]);return g.length?g[g.length-1]:null};
-const ageTxt=m=>{const a=Math.floor(m);return a+' bln '+Math.round((m-a)*30.4375)+' hr'};
+const lastOf=f=>{const g=growthSorted().filter(x=>x[f]>0);return g.length?g[g.length-1]:null};
+const ageTxt=(m,dStr)=>{
+  if(dStr){
+    const c=calDiff(db.baby.dob,dStr);
+    if(c)return c.m+' bln '+c.day+' hr';
+  }
+  if(m<0)return'0 bln 0 hr';
+  const a=Math.floor(m);
+  return a+' bln '+Math.round((m-a)*30.4375)+' hr';
+};
 
 function vChart(){
   const sx=db.baby.sex==='Laki-laki'?'L':db.baby.sex==='Perempuan'?'P':'';
   if(!sx||!db.baby.dob)return `<section class="card chart"><h2>📈 Kurva WHO</h2><p class="mut">Isi tanggal lahir dan jenis kelamin di Profil untuk melihat kurva standar WHO.</p></section>`;
   const f=gk,c=WHO[f][sx],K=GK[f];
-  const pts=growthSorted().filter(x=>x[f]).map(x=>({m:ageM(x.d),v:x[f],id:String(x.id),d:x.d})).filter(p=>p.m>=0&&p.m<=24);
-  const lm=pts.length?pts[pts.length-1].m:ageM(iso(new Date()));
+  const allPts=growthSorted().filter(x=>x[f]>0).map(x=>({m:ageM(x.d),v:x[f],id:String(x.id),d:x.d})).filter(p=>p.m>=0);
+  const pts=allPts.filter(p=>p.m<=24);
+  const hasOver24=allPts.some(p=>p.m>24);
+  const lm=pts.length?pts[pts.length-1].m:Math.min(24,Math.max(0,ageM(iso(new Date()))));
   const R=gr||(lm<=5.5?6:lm<=11.5?12:24),vis=pts.filter(p=>p.m<=R);
   const all=c.flatMap(a=>a.slice(0,R+1)).concat(vis.map(p=>p.v));
   const st=nice((Math.max(...all)-Math.min(...all))/6),lo=Math.floor(Math.min(...all)/st)*st,hi=Math.ceil(Math.max(...all)/st)*st;
@@ -948,26 +1000,27 @@ function vChart(){
     const on=selP===p.id&&selF===f,cx=X(p.m).toFixed(1),cy=Y(p.v).toFixed(1);
     s+=(on?`<circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="var(--bl)" stroke-width="2" opacity=".5"/>`:'')
       +`<circle cx="${cx}" cy="${cy}" r="${on?7.5:5.5}" fill="var(--bl)" stroke="#fff" stroke-width="2.2"/>`
-      +`<circle cx="${cx}" cy="${cy}" r="15" fill="transparent" style="cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="selPt('${esc(p.id)}')"/>`;
+      +`<circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="selPt('${esc(p.id)}')"/>`;
   });
   const SP=vis.find(p=>p.id===selP&&selF===f),L=SP||vis[vis.length-1];
   if(L){
-    const txt=SP?String(L.v).replace('.',',')+' '+K.u+' · '+ageTxt(L.m):String(L.v),tw=SP?Math.round(txt.length*6.4+20):40,bh=SP?20:16;
+    const txt=SP?fmtDec(L.v)+' '+K.u+' · '+ageTxt(L.m,L.d):fmtDec(L.v),tw=SP?Math.round(txt.length*6.4+20):42,bh=SP?20:16;
     const bx=Math.min(Math.max(X(L.m),l+tw/2),W-r-tw/2),by=Math.max(t+bh+2,Y(L.v)-(SP?17:13));
     s+=`<rect x="${(bx-tw/2).toFixed(1)}" y="${(by-bh+3).toFixed(1)}" width="${tw}" height="${bh}" rx="${bh/2}" fill="var(--bl)" pointer-events="none"/><text x="${bx.toFixed(1)}" y="${(by-bh/2+7).toFixed(1)}" text-anchor="middle" font-size="${SP?11:10.5}" font-weight="800" fill="#fff" pointer-events="none">${esc(txt)}</text>`;
   }
   s+='</svg>';
 
   const last=pts[pts.length-1];
-  const tabs=Object.keys(GK).map(k=>{const o=lastOf(k);return `<button type="button" class="${gk===k?'on':''}" onclick="gk='${k}';render()"><small>${GK[k].s}</small><b>${o?o[k]+' '+GK[k].u:'–'}</b></button>`}).join('');
-  let info=`<p class="mut" style="margin:6px 0 0">Belum ada data ${K.n.toLowerCase()}. Catat di bawah.</p>`;
+  const lastOf24=k=>{const g=growthSorted().filter(x=>x[k]>0&&ageM(x.d)>=0&&ageM(x.d)<=24);return g.length?g[g.length-1]:null};
+  const tabs=Object.keys(GK).map(k=>{const o=lastOf24(k);return `<button type="button" class="${gk===k?'on':''}" onclick="gk='${k}';renderKeepScroll()"><small>${GK[k].s}</small><b>${o?fmtDec(o[k])+' '+GK[k].u:'–'}</b></button>`}).join('');
+  let info=`<p class="mut" style="margin:6px 0 0">Belum ada data ${K.n.toLowerCase()} pada rentang 0–24 bulan. Catat di bawah.</p>`;
   if(last){
     const bd=bandDetail(c,last.v,last.m,db.baby.sex,K.n);
-    info=`<div class="sum"><div><b>${last.v} ${K.u}</b> <span class="mut">(${ageTxt(last.m)})</span></div><span class="who-status ${bd.badge.c}">${bd.badge.t}</span></div>
+    info=`<div class="sum"><div><b>${fmtDec(last.v)} ${K.u}</b> <span class="mut">(${ageTxt(last.m,last.d)})</span></div><span class="who-status ${bd.badge.c}">${bd.badge.t}</span></div>
     <div class="who-note">${bd.desc}</div>`;
   }
   const sexIcon=sx==='L'?'👦 Laki-laki':'👧 Perempuan';
-  return `<section class="card chart"><h2>📈 Kurva WHO <span class="mut">${sexIcon}</span></h2><div class="gtabs">${tabs}</div>${info}<div class="seg" style="margin:10px 0 0">${[6,12,24].map(x=>`<button type="button" class="${R===x?'on':''}" onclick="gr=${x};render()">0–${x} bln</button>`).join('')}</div>${s}<div class="lg"><span><i style="background:var(--zg)"></i>Normal (P15–P85)</span><span><i style="background:var(--zy)"></i>Waspada</span><span><i style="background:var(--zr)"></i>Luar P3–P97</span><span><i class="dot"></i>Si kecil</span></div></section>`;
+  return `<section class="card chart"><h2>📈 Kurva WHO <span class="mut">${sexIcon}</span></h2><div class="gtabs">${tabs}</div>${info}${hasOver24?'<p class="mut" style="margin:6px 0 0;font-size:11.5px">Kurva WHO menampilkan usia 0–24 bulan. Data usia di atas 24 bulan tetap tersimpan di Riwayat.</p>':''}<div class="seg" style="margin:10px 0 0">${[6,12,24].map(x=>`<button type="button" class="${R===x?'on':''}" onclick="gr=${x};renderKeepScroll()">0–${x} bln</button>`).join('')}</div>${s}<div class="lg"><span><i style="background:var(--zg)"></i>Normal (P15–P85)</span><span><i style="background:var(--zy)"></i>Waspada</span><span><i style="background:var(--zr)"></i>Luar P3–P97</span><span><i class="dot"></i>Si kecil</span></div></section>`;
 }
 
 function bnd(f,sx,rec){
@@ -994,7 +1047,7 @@ function vGrowTips(){
       c:[['🚨','Lingkar kepala di bawah P3. Periksakan ke dokter anak.'],['✅','Lingkar kepala normal.'],['✅','Lingkar kepala normal.'],['✅','Lingkar kepala normal.'],['✅','Lingkar kepala normal.'],['🚨','Lingkar kepala di atas P97. Periksakan ke dokter anak.']]
     };
     ['w','h','c'].forEach(f=>{const k=bnd(f,sx,lastOf(f));if(k!==null)T.push(W[f][k])});
-    const ws=g.filter(x=>x.w);
+    const ws=g.filter(x=>x.w>0);
     if(ws.length>=2){
       const a=ws[ws.length-2],b=ws[ws.length-1],diff=b.w-a.w,dys=dd(a.d,b.d);
       if(dys>0){
@@ -1002,42 +1055,60 @@ function vGrowTips(){
         else if(diff===0&&dys>=14)T.push(['⚠️','Berat badan belum naik dalam '+dys+' hari. Pantau asupan dan konsultasikan bila berlanjut.']);
         else if(diff>0)T.push(['📈','Berat badan naik '+Math.round(diff*1000)+' g dalam '+dys+' hari.']);
       }
-      const kp=bnd('w',sx,a),kl=bnd('w',sx,b);
-      if(kp!==null&&kl!==null&&kp-kl>=2)T.push(['⚠️','Posisi berat badan di kurva turun jauh dari catatan sebelumnya. Sebaiknya konsultasikan ke dokter anak.']);
+      if(dys>0){
+        const kp=bnd('w',sx,a),kl=bnd('w',sx,b);
+        if(kp!==null&&kl!==null&&kp-kl>=2)T.push(['⚠️','Posisi berat badan di kurva turun jauh dari catatan sebelumnya. Sebaiknya konsultasikan ke dokter anak.']);
+      }
     }
     const m=ageM(today);
     if(m>=0&&m<6)T.push(['🍼','Usia di bawah 6 bulan: cukup ASI atau susu sesuai keinginan bayi.']);
     else if(m>=6&&m<12)T.push(['🥣','Usia 6 bulan ke atas: MPASI 2-3 kali sehari plus ASI atau susu. Sertakan protein hewani seperti telur, ikan, atau daging.']);
-    else if(m>=12)T.push(['🍚','Usia 1 tahun ke atas: makan 3 kali dan 1-2 camilan sehat, ASI atau susu tetap lanjut.']);
+    else if(m>=12&&m<=24)T.push(['🍚','Usia 1–2 tahun: makan 3 kali dan 1-2 camilan sehat, ASI atau susu tetap lanjut.']);
+    else if(m>24)T.push(['🍽️','Usia di atas 2 tahun: fokus menu keluarga bergizi seimbang & pantau pertumbuhan berkala.']);
   }
   return `<section class="card milk"><h2>💡 Saran pertumbuhan</h2>${T.map(x=>`<div class="tip"><span>${x[0]}</span><span>${x[1]}</span></div>`).join('')}<div class="mut" style="font-size:12px;margin-top:8px">Saran umum berdasarkan standar WHO, bukan pengganti dokter atau bidan.</div></section>`;
 }
 function vGrow(){
   const g=growthSorted().reverse();
-  if(!gdVal)gdVal=iso(new Date());
+  const td=iso(new Date());
+  if(!gdVal||gdVal>td)gdVal=td;
   return vChart()+vGrowTips()+`<section class="card sun"><h2>📏 Catat pertumbuhan</h2>
   <label>Tanggal</label>
   ${dateShell({
     id:'gd',
     val:gdVal,
-    max:iso(new Date()),
+    max:td,
     ico:'📅',
-    onchg:"if(this.value){gdVal=this.value;const l=$('#gd-lbl');if(l){l.textContent=fd(this.value,{day:'numeric',month:'short',year:'numeric'});l.parentElement.classList.remove('ph')}}"
+    onchg:"const td=iso(new Date());if(this.value){const v=this.value>td?td:this.value;this.value=v;gdVal=v;const l=$('#gd-lbl');if(l){l.textContent=fd(v,{day:'numeric',month:'short',year:'numeric'});l.parentElement.classList.remove('ph')}}"
   })}
   <div class="grid"><div><label>Berat (kg)</label><input id="gw" type="text" inputmode="decimal" placeholder="4,1 atau 4100"></div><div><label>Panjang (cm)</label><input id="gh" type="text" inputmode="decimal" placeholder="55,5"></div></div>
   <label>Lingkar kepala (cm)</label><input id="gc" type="text" inputmode="decimal" placeholder="37,5">
   <div style="height:10px"></div><button class="btn" type="button" style="width:100%" onclick="addG()">Simpan</button></section>
-  <section class="card lil"><h2>📒 Riwayat</h2>${g.length?`<div class="tbl"><table><tr><th>Tanggal</th><th>BB kg</th><th>PB cm</th><th>LK cm</th><th></th></tr>${g.map(x=>`<tr><td>${fd(x.d,{day:'numeric',month:'short',year:'2-digit'})}</td><td>${x.w||'–'}</td><td>${x.h||'–'}</td><td>${x.c||'–'}</td><td><button type="button" style="background:none;border:0;color:var(--mut);min-height:36px;cursor:pointer" onclick="delG('${esc(x.id)}')">✕</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Belum ada data pertumbuhan.</p>'}</section>`;
+  <section class="card lil"><h2>📒 Riwayat</h2>${g.length?`<div class="tbl"><table><tr><th>Tanggal</th><th>BB kg</th><th>PB cm</th><th>LK cm</th><th></th></tr>${g.map(x=>`<tr><td>${fd(x.d,{day:'numeric',month:'short',year:'2-digit'})}</td><td>${fmtDec(x.w)}</td><td>${fmtDec(x.h)}</td><td>${fmtDec(x.c)}</td><td><button type="button" style="background:none;border:0;color:var(--mut);min-height:36px;cursor:pointer" onclick="delG('${esc(x.id)}')">✕</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Belum ada data pertumbuhan.</p>'}</section>`;
 }
 function addG(){
-  const w=kg($('#gw').value),h=num($('#gh').value),c=num($('#gc').value),d=($('#gd')?$('#gd').value:gdVal)||gdVal;
+  const td=iso(new Date());
+  const w=kg($('#gw').value),h=num($('#gh').value),c=num($('#gc').value);
+  let d=($('#gd')?$('#gd').value:gdVal)||td;
+  if(d>td){
+    d=td;
+    gdVal=td;
+    toast('Tanggal tidak boleh melebihi hari ini');
+    renderKeepScroll();
+    return;
+  }
   if(!d||!(w||h||c)){toast('Isi tanggal & minimal satu ukuran');return}
+  if((w&&(w<0.5||w>35))||(h&&(h<25||h>150))||(c&&(c<20||c>70))){
+    toast('Periksa kembali angka ukuran (di luar rentang wajar bayi/anak)');
+    return;
+  }
   db.growth.push({id:String(Date.now())+'-'+Math.random().toString(36).slice(2,6),d,w:w||0,h:h||0,c:c||0});
-  save();render();playAdd('milk');toast('Tersimpan');
+  gdVal=td;
+  save();renderKeepScroll();playAdd('milk');toast('Tersimpan');
 }
 function delG(id){
   db.growth=db.growth.filter(x=>String(x.id)!==String(id));
-  save();render();toast('Data dihapus');
+  save();renderKeepScroll();toast('Data dihapus');
 }
 
 /* === 6. TAB REKAP (CLEAN 1-ROW MONTH & YEAR PICKERS + GRAPH) === */
@@ -1048,27 +1119,30 @@ function dayStats(prefix){
   const ks=Object.keys(db.logs).filter(k=>k.startsWith(prefix)).sort().filter(k=>sum(db.logs[k].milk)||sum(db.logs[k].pump));
   const m=ks.reduce((s,k)=>s+sum(db.logs[k].milk),0),p=ks.reduce((s,k)=>s+sum(db.logs[k].pump),0),tg=target();
   const mk=ks.filter(k=>sum(db.logs[k].milk)>0);
-  const hit=mk.filter(k=>{const g=db.logs[k].tg||tg;return g&&sum(db.logs[k].milk)>=g}).length;
-  const pctList=mk.map(k=>{const g=db.logs[k].tg||tg;return g?Math.round(sum(db.logs[k].milk)/g*100):0});
+  const mkWithTg=mk.filter(k=>(db.logs[k].tg||tg)>0);
+  const hit=mkWithTg.filter(k=>sum(db.logs[k].milk)>=(db.logs[k].tg||tg)).length;
+  const pctList=mkWithTg.map(k=>Math.round(sum(db.logs[k].milk)/(db.logs[k].tg||tg)*100));
   const avgPct=pctList.length?Math.round(pctList.reduce((a,b)=>a+b,0)/pctList.length):0;
-  return{ks,mk,m,p,hit,days:mk.length,act:ks.length,avgPct};
+  return{ks,mk,m,p,hit,tgDays:mkWithTg.length,days:mk.length,act:ks.length,avgPct};
 }
 function renderRekapBarChart(items,tg){
   if(!items.length)return '';
-  const W=340,H=135,l=12,r=12,t=16,b=24,cw=W-l-r,ch=H-t-b;
+  const W=340,H=135,l=12,r=12,t=18,b=24,cw=W-l-r,ch=H-t-b;
   const maxV=Math.max(tg||1,...items.map(x=>x.v),100);
   const bw=Math.min(26,Math.max(8,(cw/items.length)*0.65)),step=cw/items.length;
   let svg=`<div class="rchart"><svg viewBox="0 0 ${W} ${H}">`;
   if(tg>0){
-    const ty=t+ch*(1-Math.min(1,tg/maxV));
+    const ty=Math.max(t,t+ch*(1-Math.min(1,tg/maxV)));
     svg+=`<line x1="${l}" x2="${W-r}" y1="${ty.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="var(--ok)" stroke-dasharray="4 3" stroke-width="1.3"/>
-    <text x="${W-r}" y="${(ty-3).toFixed(1)}" text-anchor="end" font-size="9" font-weight="800" fill="var(--ok)">Target ${n(tg)}</text>`;
+    <text x="${W-r}" y="${Math.max(11,ty-3).toFixed(1)}" text-anchor="end" font-size="9" font-weight="800" fill="var(--ok)">Target ${n(tg)}</text>`;
   }
   items.forEach((it,idx)=>{
     const x=l+idx*step+(step-bw)/2;
-    const h=Math.max(3,ch*(it.v/maxV)),y=t+ch-h;
-    const hit=tg>0&&it.v>=tg;
-    svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="5" fill="${!it.v?'var(--line)':hit?'var(--ok)':'var(--pri)'}"/>`;
+    if(it.v>0){
+      const h=Math.max(3,ch*(it.v/maxV)),y=t+ch-h;
+      const hit=tg>0&&it.v>=tg;
+      svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="5" fill="${hit?'var(--ok)':'var(--pri)'}"/>`;
+    }
     if(items.length<=15||idx%Math.ceil(items.length/10)===0){
       svg+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--mut)">${esc(it.lbl)}</text>`;
     }
@@ -1076,50 +1150,329 @@ function renderRekapBarChart(items,tg){
   svg+=`</svg></div>`;
   return svg;
 }
+let aiState={loading:false,period:'',text:'',err:'',openKey:false};
+
+function getGrowthRefSummary(){
+  const sxCode=db.baby.sex==='Laki-laki'?'L':db.baby.sex==='Perempuan'?'P':'';
+  if(!sxCode||!db.baby.dob)return '- Belum lengkap (tanggal lahir atau jenis kelamin belum diisi).';
+  const fields=[['w','Berat badan','kg'],['h','Panjang badan','cm'],['c','Lingkar kepala','cm']];
+  const lines=[];
+  fields.forEach(([f,label,unit])=>{
+    const rec=lastOf(f);
+    if(!rec||!rec[f])return;
+    const m=ageM(rec.d);
+    if(m<0||m>24){
+      lines.push(`- ${label} terakhir (${rec.d}): ${fmtDec(rec[f])} ${unit} (usia di luar kurva WHO 0-24 bln).`);
+      return;
+    }
+    const cs=WHO[f][sxCode];
+    const i=Math.max(0,Math.min(23,Math.floor(m))),t=m-i;
+    const ref=cs.map(a=>a[i]+(a[i+1]-a[i])*t);
+    let k=0;while(k<5&&rec[f]>=ref[k])k++;
+    const bandNames=['Di bawah P3','Normal agak bawah (P3-P15)','Normal ideal (P15-P50)','Normal ideal (P50-P85)','Normal agak atas (P85-P97)','Di atas P97'];
+    lines.push(`- ${label} (${rec.d}, usia ${ageTxt(m)}): ${fmtDec(rec[f])} ${unit} -> posisi WHO: ${bandNames[k]}`);
+  });
+  const ws=growthSorted().filter(x=>x.w>0);
+  if(ws.length>=2){
+    const a=ws[ws.length-2],b=ws[ws.length-1];
+    const diffGram=Math.round((b.w-a.w)*1000);
+    const days=Math.round((new Date(b.d+'T00:00')-new Date(a.d+'T00:00'))/864e5);
+    if(days>0)lines.push(`- Perubahan BB terakhir: ${diffGram>=0?'+'+diffGram:diffGram} g dalam ${days} hari (${a.d} ke ${b.d}).`);
+  }
+  return lines.length?lines.join('\n'):'- Belum ada pengukuran pertumbuhan.';
+}
+
+function getAgeGuidanceSummary(){
+  const m=db.baby.dob?ageM(iso(new Date())):null;
+  if(m===null||m<0)return '- Saran usia: belum tersedia (isi tanggal lahir di Profil).';
+  if(m<6)return '- Panduan usia (<6 bln): ASI/susu sesuai kebutuhan, belum perlu air putih atau MPASI.';
+  if(m<12)return '- Panduan usia (6-12 bln): mulai MPASI bertahap 2-3x/hari sambil tetap lanjut ASI/susu.';
+  if(m<=24)return '- Panduan usia (12-24 bln): makanan keluarga + ASI/susu tetap dilanjutkan.';
+  return '- Panduan usia (>24 bln): fokus menu keluarga bergizi seimbang & pantau pertumbuhan berkala.';
+}
+
+function buildRekapPrompt(){
+  const nm=db.baby.name||'Si Kecil';
+  const sx=db.baby.sex||'Belum diisi';
+  const ag=age()||'Belum diisi';
+  const bw=db.baby.bw?fmtDec(db.baby.bw)+' kg':'Belum diisi';
+  const tg=target();
+  const gAll=growthSorted();
+  const latestG=gAll.slice(-3).map(x=>`${x.d}: BB ${x.w?fmtDec(x.w)+' kg':'-'}, PB ${x.h?fmtDec(x.h)+' cm':'-'}, LK ${x.c?fmtDec(x.c)+' cm':'-'}`).join(' | ')||'Belum ada data';
+  const whoSummary=getGrowthRefSummary();
+  const ageGuide=getAgeGuidanceSummary();
+
+  if(rk==='m'){
+    const s=dayStats(rm);
+    const labelBulan=MONTHS[Math.max(0,Math.min(11,(+rm.slice(5)||1)-1))]+' '+rm.slice(0,4);
+    const dailyLines=s.ks.map(k=>{
+      const m=sum(db.logs[k].milk),p=sum(db.logs[k].pump),g=db.logs[k].tg||tg;
+      const pct=g?Math.round(m/g*100)+'%':'-';
+      return `- ${k}: susu ${m} ml (${(db.logs[k].milk||[]).length}x, target ${g||'-'} ml, ${pct}), pumping ${p} ml (${(db.logs[k].pump||[]).length}x)`;
+    }).join('\n')||'- Belum ada catatan pada bulan ini.';
+    const gMonth=gAll.filter(x=>x.d.startsWith(rm)).map(x=>`- ${x.d}: BB ${x.w?fmtDec(x.w)+' kg':'-'}, PB ${x.h?fmtDec(x.h)+' cm':'-'}, LK ${x.c?fmtDec(x.c)+' cm':'-'}`).join('\n')||'- Tidak ada pengukuran di bulan ini.';
+
+    return `Kamu adalah asisten analisis catatan bayi yang ramah, ringkas, dan suportif untuk orang tua di Indonesia. Analisis data rekap BULANAN berikut dengan mengacu pada panduan usia, kurva pertumbuhan WHO, dan saran praktis langkah apa yang harus dilakukan orang tua.
+
+Profil Bayi:
+- Nama: ${nm}
+- Jenis Kelamin: ${sx}
+- Usia saat ini: ${ag}
+- Berat lahir: ${bw}
+- Target harian saat ini: ${tg?tg+' ml':'Belum diatur'}
+
+Acuan Usia & Pertumbuhan WHO:
+${ageGuide}
+${whoSummary}
+
+Ringkasan Periode (${labelBulan}):
+- Total susu diminum: ${s.m} ml
+- Rata-rata susu per hari minum: ${s.days?Math.round(s.m/s.days):0} ml (${s.days} hari minum, ${s.act} hari aktif)
+- Capaian target: ${s.hit} dari ${s.days} hari (${s.days?Math.round(s.hit/s.days*100):0}%), rata-rata capaian ${s.avgPct}%
+- Total pumping ASI: ${s.p} ml
+
+Rincian Harian:
+${dailyLines}
+
+Catatan Pertumbuhan Bulan Ini:
+${gMonth}
+
+Catatan Pertumbuhan Terakhir (keseluruhan):
+${latestG}
+
+Format jawaban singkat & mudah dibaca di HP (maksimal 4 bagian dengan bullet poin):
+1. **Evaluasi Asupan & Pumping** (konsistensi target harian, takaran, serta kecukupan/porsi pumping)
+2. **Evaluasi Pertumbuhan & Kurva WHO** (baca posisi BB/PB/LK, tren kenaikan, dan kesesuaian dengan usia)
+3. **Hal yang Harus Dilakukan Selanjutnya** (langkah konkret harian/mingguan untuk asupan, jadwal ukur/posyandu, atau kapan perlu ke dokter anak)
+4. **Catatan Singkat** (pengingat informatif bahwa ini bukan pengganti dokter atau bidan).`;
+  }else{
+    let totalM=0,totalP=0,totalDays=0,totalAct=0,totalHit=0,monthLines=[];
+    for(let i=1;i<=12;i++){
+      const pre=ry+'-'+String(i).padStart(2,'0'),s=dayStats(pre);
+      const gm=gAll.filter(x=>x.d.startsWith(pre)&&x.w>0);
+      totalM+=s.m;totalP+=s.p;totalDays+=s.days;totalAct+=s.act;totalHit+=s.hit;
+      if(s.act||gm.length){
+        monthLines.push(`- ${MONTHS_SHORT[i-1]} ${ry}: ${s.days} hr minum, total susu ${s.m} ml (rata-rata ${s.days?Math.round(s.m/s.days):0} ml/hr, capaian ${s.avgPct}%), pumping ${s.p} ml, BB akhir bulan ${gm.length?fmtDec(gm[gm.length-1].w)+' kg':'-'}`);
+      }
+    }
+    return `Kamu adalah asisten analisis catatan bayi yang ramah, ringkas, dan suportif untuk orang tua di Indonesia. Analisis data rekap TAHUNAN berikut dengan mengacu pada panduan usia, kurva pertumbuhan WHO, dan saran praktis langkah apa yang harus dilakukan orang tua.
+
+Profil Bayi:
+- Nama: ${nm}
+- Jenis Kelamin: ${sx}
+- Usia saat ini: ${ag}
+- Berat lahir: ${bw}
+- Target harian saat ini: ${tg?tg+' ml':'Belum diatur'}
+
+Acuan Usia & Pertumbuhan WHO:
+${ageGuide}
+${whoSummary}
+
+Ringkasan Tahunan (${ry}):
+- Total susu setahun: ${totalM} ml (${totalDays} hari minum, ${totalAct} hari aktif)
+- Hari mencapai target: ${totalHit}/${totalDays} hari (${totalDays?Math.round(totalHit/totalDays*100):0}%)
+- Total pumping setahun: ${totalP} ml
+
+Rincian Per Bulan:
+${monthLines.join('\n')||'- Belum ada catatan di tahun ini.'}
+
+Catatan Pertumbuhan Terakhir:
+${latestG}
+
+Format jawaban singkat & mudah dibaca di HP (maksimal 4 bagian dengan bullet poin):
+1. **Tren Tahunan Asupan & Pumping** (perubahan antar-bulan, konsistensi target, dan peran pumping)
+2. **Evaluasi Pertumbuhan Anak** (perkembangan BB/PB/LK terhadap usia & acuan WHO)
+3. **Hal yang Harus Dilakukan Selanjutnya** (langkah nyata yang perlu dilakukan orang tua ke depan sesuai usia & data pertumbuhan)
+4. **Catatan Singkat** (pengingat informatif bahwa ini bukan pengganti dokter atau bidan).`;
+  }
+}
+
+function fmtAIHtml(txt){
+  const lines=esc(txt).split(/\r?\n/);
+  let out='',inList=false;
+  lines.forEach(raw=>{
+    const line=raw.trim();
+    if(!line){
+      if(inList){out+='</ul>';inList=false}
+      return;
+    }
+    const formatted=line.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    if(/^[-*•]\s+/.test(line)){
+      if(!inList){out+='<ul style="margin:6px 0 8px 18px;padding:0">';inList=true}
+      out+='<li style="margin-bottom:4px">'+formatted.replace(/^[-*•]\s+/,'')+'</li>';
+    }else{
+      if(inList){out+='</ul>';inList=false}
+      out+='<p style="margin:6px 0">'+formatted+'</p>';
+    }
+  });
+  if(inList)out+='</ul>';
+  return out;
+}
+
+async function callGeminiModel(modelName,key,prompt){
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(modelName)+':generateContent?key='+encodeURIComponent(key);
+  const res=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{temperature:0.5,maxOutputTokens:1400}
+    })
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    const msg=(data&&data.error&&data.error.message)||('Gagal menghubungi Gemini (HTTP '+res.status+')');
+    const err=new Error(msg);
+    err.status=res.status;
+    throw err;
+  }
+  const txt=(data&&data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[]).map(p=>p.text||'').join('').trim();
+  if(!txt)throw new Error('Respons Gemini kosong. Coba ulangi beberapa saat lagi.');
+  return txt;
+}
+
+function sleepMs(ms){return new Promise(r=>setTimeout(r,ms))}
+
+async function runGeminiRekap(){
+  const curPeriod=rk==='m'?'m:'+rm:'y:'+ry;
+  const key=(db.baby.geminiKey||'').trim();
+  if(!key){
+    aiState.err='Gemini API Key belum diatur. Silakan isi di menu Profil terlebih dahulu.';
+    renderKeepScroll();
+    return;
+  }
+  const s=rk==='m'?dayStats(rm):null;
+  const hasYearData=rk==='y'?Array.from({length:12},(_,i)=>dayStats(ry+'-'+String(i+1).padStart(2,'0')).act).some(x=>x>0):false;
+  if((rk==='m'&&!s.act&&!growthSorted().some(x=>x.d.startsWith(rm)))||(rk==='y'&&!hasYearData&&!growthSorted().some(x=>x.d.startsWith(ry)))){
+    toast('Belum ada data pada periode ini untuk dianalisis');
+    return;
+  }
+  aiState.loading=true;
+  aiState.period=curPeriod;
+  aiState.err='';
+  renderKeepScroll();
+
+  async function listAvailableModels(apiKey){
+    try{
+      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(apiKey));
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok||!Array.isArray(d.models))return [];
+      return d.models
+        .filter(m=>Array.isArray(m.supportedGenerationMethods)&&m.supportedGenerationMethods.includes('generateContent'))
+        .map(m=>String(m.name||'').replace(/^models\//,''))
+        .filter(Boolean);
+    }catch(_){
+      return [];
+    }
+  }
+
+  try{
+    const prompt=buildRekapPrompt();
+    const discovered=await listAvailableModels(key);
+    const preferred=['gemini-3.8-flash','gemini-3.8-flash-lite','gemini-2.5-flash','gemini-2.0-flash','gemini-1.5-flash'];
+    const candidateSet=new Set();
+    discovered.filter(n=>/flash/i.test(n)).forEach(n=>candidateSet.add(n));
+    preferred.forEach(n=>candidateSet.add(n));
+    discovered.forEach(n=>candidateSet.add(n));
+    const models=Array.from(candidateSet);
+
+    let txt='';
+    let lastErr=null;
+    for(let i=0;i<models.length;i++){
+      const mName=models[i];
+      try{
+        txt=await callGeminiModel(mName,key,prompt);
+        lastErr=null;
+        break;
+      }catch(e){
+        lastErr=e;
+        const msg=String((e&&e.message)||'');
+        const retryable=/not found|not supported|high demand|overloaded|unavailable|quota|rate|resource_exhausted|404|429|503/i.test(msg)||(e&&[404,429,503].includes(e.status));
+        if(retryable&&i<models.length-1){
+          await sleepMs(450);
+          continue;
+        }
+        throw e;
+      }
+    }
+    if(lastErr&&!txt)throw lastErr;
+    aiState.text=txt;
+    aiState.period=curPeriod;
+    aiState.err='';
+  }catch(e){
+    const rawMsg=e&&e.message?e.message:'Terjadi kesalahan saat menganalisis data.';
+    if(/high demand|overloaded|unavailable|503/i.test(rawMsg)){
+      aiState.err='Server Gemini sedang ramai/beban tinggi sementara. Coba tekan analisis lagi dalam beberapa detik.';
+    }else{
+      aiState.err=rawMsg;
+    }
+  }finally{
+    aiState.loading=false;
+    renderKeepScroll();
+  }
+}
+
+function vRekapAI(){
+  const curPeriod=rk==='m'?'m:'+rm:'y:'+ry;
+  const hasKey=Boolean((db.baby.geminiKey||'').trim());
+  const isSamePeriod=aiState.period===curPeriod;
+  const showResult=isSamePeriod&&aiState.text;
+  const showErr=isSamePeriod&&aiState.err;
+
+  return `<section class="card milk" id="ai-rekap-box">
+    <h2>✨ Analisis Gemini AI</h2>
+    <p class="mut" style="margin:4px 0 10px">Analisis pola minum susu, pumping, pertumbuhan, serta saran langkah selanjutnya pada periode ${rk==='m'?'bulan':'tahun'} ini.</p>
+    ${!hasKey?`<p class="mut" style="font-size:12px;margin:0 0 10px">Belum ada API Key. Isi dulu di menu <b>Profil</b> agar analisis bisa dijalankan.</p>`:''}
+    <button class="btn" type="button" style="width:100%" ${aiState.loading?'disabled':''} onclick="runGeminiRekap()">
+      ${aiState.loading?'⏳ Sedang menganalisis dengan Gemini...':(showResult?'🔄 Analisis Ulang Periode Ini':'✨ Analisis Rekap dengan Gemini')}
+    </button>
+    ${showErr?`<div class="who-note" style="border-color:var(--lr);color:var(--lr);margin-top:10px"><b>Gagal analisis:</b> ${esc(aiState.err)}</div>`:''}
+    ${showResult?`<div class="who-note" style="border-color:var(--sky-b);margin-top:10px;font-size:13.5px">${fmtAIHtml(aiState.text)}</div>`:''}
+  </section>`;
+}
+
 function vRekap(){
-  let h=`<div class="seg"><button type="button" class="${rk==='m'?'on':''}" onclick="rk='m';render()">Bulanan</button><button type="button" class="${rk==='y'?'on':''}" onclick="rk='y';render()">Tahunan</button></div>`;
+  let h=`<div class="seg"><button type="button" class="${rk==='m'?'on':''}" onclick="rk='m';renderKeepScroll()">Bulanan</button><button type="button" class="${rk==='y'?'on':''}" onclick="rk='y';renderKeepScroll()">Tahunan</button></div>`;
   if(rk==='m'){
     const s=dayStats(rm),tg=target();
-    const hitPct=s.days?Math.round(s.hit/s.days*100):0;
+    const hitDenom=s.tgDays||s.days;
+    const hitPct=s.tgDays?Math.round(s.hit/s.tgDays*100):0;
     const chartItems=s.mk.slice(-14).map(k=>({lbl:k.slice(8),v:sum(db.logs[k].milk)}));
     h+=`${periodBar('m')}
     <div class="stats">
-      <div class="card"><span class="mut">Total susu</span><b>${n(s.m)} ml</b><span class="pct-pill">Rata-rata ${s.avgPct}% target</span></div>
-      <div class="card"><span class="mut">Rata-rata/hari</span><b>${s.days?n(s.m/s.days):0} ml</b><span class="pct-pill">${s.days} hari tercatat</span></div>
-      <div class="card"><span class="mut">Target tercapai</span><b>${s.hit}/${s.days} hr</b><span class="pct-pill ${hitPct>0?'ok-t':''}">${hitPct}% hari sukses</span></div>
+      <div class="card"><span class="mut">Total susu</span><b>${n(s.m)} ml</b><span class="pct-pill">${s.tgDays?'Rata-rata '+s.avgPct+'% target':'Target belum diatur'}</span></div>
+      <div class="card"><span class="mut">Rata-rata/hari</span><b>${s.days?n(s.m/s.days):0} ml</b><span class="pct-pill">${s.days} hr minum · ${s.act} hr aktif</span></div>
+      <div class="card"><span class="mut">Target tercapai</span><b>${s.hit}/${hitDenom} hr</b><span class="pct-pill ${hitPct>0?'ok-t':''}">${hitPct}% hari sukses</span></div>
       <div class="card"><span class="mut">Total pumping</span><b>${n(s.p)} ml</b><span class="pct-pill">${s.m+s.p?Math.round(s.p/(s.m+s.p)*100):0}% dr total ASI</span></div>
     </div>
     ${s.days?`<section class="card chart"><h2>📊 Grafik Susu Harian <span class="mut">14 hr terakhir</span></h2>${renderRekapBarChart(chartItems,tg)}</section>`:''}
-    <section class="card lil"><h2>Per hari</h2>${s.act?`<div class="tbl"><table><tr><th>Tanggal</th><th>Susu</th><th>Pump</th><th>Target</th><th>Capaian</th></tr>${s.ks.map(k=>{const t=sum(db.logs[k].milk),g=db.logs[k].tg||tg;return `<tr><td>${fd(k)}</td><td>${n(t)}</td><td>${n(sum(db.logs[k].pump))}</td><td>${g?n(g):'–'}</td><td>${g?'<span class="'+(t>=g?'ok-t':'')+'">'+(t>=g?'✓ ':'')+Math.round(t/g*100)+'%</span>':''}</td></tr>`}).join('')}</table></div>`:'<p class="mut">Belum ada catatan bulan ini.</p>'}</section>`;
+    <section class="card lil"><h2>Per hari</h2>${s.act?`<div class="tbl"><table><tr><th>Tanggal</th><th>Susu</th><th>Pump</th><th>Target</th><th>Capaian</th></tr>${s.ks.map(k=>{const t=sum(db.logs[k].milk),g=db.logs[k].tg||tg;return `<tr><td>${fd(k)}</td><td>${n(t)}</td><td>${n(sum(db.logs[k].pump))}</td><td>${g?n(g):'–'}</td><td>${g?'<span class="'+(t>=g?'ok-t':'')+'">'+(t>=g?'✓ ':'')+Math.round(t/g*100)+'%</span>':'–'}</td></tr>`}).join('')}</table></div>`:'<p class="mut">Belum ada catatan bulan ini.</p>'}</section>`;
     const g=growthSorted().filter(x=>x.d.startsWith(rm));
-    if(g.length)h+=`<section class="card k3"><h2>Pertumbuhan bulan ini</h2>${g.map(x=>`<div class="item"><span>${fd(x.d)}</span><span>${x.w?x.w+' kg ':''}${x.h?x.h+' cm ':''}${x.c?'LK '+x.c:''}</span></div>`).join('')}</section>`;
+    if(g.length)h+=`<section class="card k3"><h2>Pertumbuhan bulan ini</h2>${g.map(x=>`<div class="item"><span>${fd(x.d)}</span><span>${x.w?fmtDec(x.w)+' kg ':''}${x.h?fmtDec(x.h)+' cm ':''}${x.c?'LK '+fmtDec(x.c):''}</span></div>`).join('')}</section>`;
   }else{
-    let rows='',T={m:0,p:0,d:0,a:0,hit:0},yrBars=[];
+    let rows='',T={m:0,p:0,d:0,tgd:0,a:0,hit:0},yrBars=[];
     for(let i=1;i<=12;i++){
-      const pre=ry+'-'+String(i).padStart(2,'0'),s=dayStats(pre),g=growthSorted().filter(x=>x.d.startsWith(pre)&&x.w);
-      T.m+=s.m;T.p+=s.p;T.d+=s.days;T.a+=s.act;T.hit+=s.hit;
+      const pre=ry+'-'+String(i).padStart(2,'0'),s=dayStats(pre),g=growthSorted().filter(x=>x.d.startsWith(pre)&&x.w>0);
+      T.m+=s.m;T.p+=s.p;T.d+=s.days;T.tgd+=s.tgDays;T.a+=s.act;T.hit+=s.hit;
       yrBars.push({lbl:MONTHS_SHORT[i-1],v:s.days?Math.round(s.m/s.days):0});
-      rows+=`<tr><td>${MONTHS_SHORT[i-1]}</td><td>${s.days}</td><td>${n(s.m)}</td><td>${s.days?n(s.m/s.days):'–'}</td><td>${s.days?s.avgPct+'%':'–'}</td><td>${g.length?g[g.length-1].w:'–'}</td></tr>`;
+      rows+=`<tr><td>${MONTHS_SHORT[i-1]}</td><td>${s.days}</td><td>${n(s.m)}</td><td>${s.days?n(s.m/s.days):'–'}</td><td>${s.tgDays?s.avgPct+'%':'–'}</td><td>${g.length?fmtDec(g[g.length-1].w):'–'}</td></tr>`;
     }
     h+=`${periodBar('y')}
     <div class="stats">
-      <div class="card"><span class="mut">Total susu</span><b>${n(T.m)} ml</b><span class="pct-pill">${T.d?Math.round(T.hit/T.d*100):0}% hari capai target</span></div>
+      <div class="card"><span class="mut">Total susu</span><b>${n(T.m)} ml</b><span class="pct-pill">${T.tgd?Math.round(T.hit/T.tgd*100):0}% hari capai target</span></div>
       <div class="card"><span class="mut">Total pumping</span><b>${n(T.p)} ml</b><span class="pct-pill">${T.a} hari aktif</span></div>
     </div>
     <section class="card chart"><h2>📊 Rata-rata Susu / Hari</h2>${renderRekapBarChart(yrBars,target())}</section>
     <section class="card sun"><h2>Per bulan (${esc(ry)})</h2><div class="tbl"><table><tr><th>Bulan</th><th>Hari</th><th>Susu</th><th>/hari</th><th>Capai</th><th>BB</th></tr>${rows}</table></div></section>`;
   }
-  return h;
+  return h+vRekapAI();
 }
 
-/* === 7. TAB PROFIL (THEME, JSON BACKUP/RESTORE & RESET) === */
+/* === 7. TAB PROFIL (TANPA FOTO, THEME, JSON BACKUP/RESTORE & RESET) === */
 function vProfil(){
   const b=db.baby;
   const autoTg=lastW()?Math.round(lastW()*150):0;
   return `<section class="card k3"><h2>👶 Data si kecil<button type="button" class="ico-btn" aria-label="Ganti tema" onclick="setTheme(theme==='dark'?'light':'dark')">${theme==='dark'?'☀️':'🌙'}</button></h2>
-  <label>Foto</label>
-  <div class="row" id="ph-box">${photoBox()}</div>
-  <input id="f-photo" type="file" accept="image/*" style="display:none" onchange="pickPhoto(this)">
   <label>Nama</label><input id="pn" type="text" value="${esc(b.name)}" placeholder="Nama bayi">
   <label>Tanggal lahir</label>
   ${dateShell({
@@ -1136,7 +1489,18 @@ function vProfil(){
   </div>
   <label>Target susu/hari (ml)</label><input id="pt" type="number" inputmode="numeric" value="${esc(b.target)}" placeholder="Otomatis ${autoTg?n(autoTg)+' ml':'dari berat badan'}">
   <p class="mut" style="margin:6px 0 10px;font-size:12px">Otomatis 150 ml/kg BB. Sesuaikan saran dokter.</p>
-  <button class="btn" type="button" style="width:100%" onclick="saveP()">Simpan</button></section>
+  <label>Gemini API Key (opsional untuk Analisis Rekap)</label>
+  <div id="gk-wrap">
+    ${((b.geminiKey||'').trim()&&!editingGeminiKey)
+      ?`<div class="row" style="margin-top:4px">
+          <div style="flex:1;min-height:44px;padding:8px 12px;border-radius:15px;border:2px solid var(--mint-b);background:var(--card);color:var(--ok);font:800 14px Nunito,sans-serif;display:flex;align-items:center;gap:6px">✅ API Key tersimpan</div>
+          <button class="btn alt" type="button" onclick="openEditGeminiKey()">Ubah</button>
+          <button class="btn danger" type="button" style="min-width:0;padding:8px 12px" onclick="clearGeminiKey()">Hapus</button>
+        </div>`
+      :`<input id="pgk" type="password" value="" placeholder="AIzaSy...">`
+    }
+  </div>
+  <button class="btn" type="button" style="width:100%;margin-top:10px" onclick="saveP()">Simpan</button></section>
 
   <section class="card lil"><h2>💾 Cadangan & Reset</h2>
   <p class="mut" style="margin:4px 0 10px;font-size:12px">Data tersimpan otomatis di perangkat ini.</p>
@@ -1146,58 +1510,89 @@ function vProfil(){
     <input id="f-json" type="file" accept=".json,application/json" style="display:none" onchange="importJSON(this)">
   </div>
   ${resetConfirm
-    ?`<div class="row"><button class="btn alt" type="button" style="flex:1" onclick="resetConfirm=false;render()">Batal</button><button class="btn danger" type="button" style="flex:1" onclick="wipeAll()">Ya, Hapus Semua</button></div>`
-    :`<button class="btn danger" type="button" style="width:100%;min-height:38px;font-size:13px" onclick="resetConfirm=true;render()">🗑️ Hapus Semua Data</button>`
+    ?`<div class="row"><button class="btn alt" type="button" style="flex:1" onclick="const d=captureProfilDraft();resetConfirm=false;renderKeepScroll();restoreProfilDraft(d)">Batal</button><button class="btn danger" type="button" style="flex:1" onclick="wipeAll()">Ya, Hapus Semua</button></div>`
+    :`<button class="btn danger" type="button" style="width:100%;min-height:38px;font-size:13px" onclick="const d=captureProfilDraft();resetConfirm=true;renderKeepScroll();restoreProfilDraft(d)">🗑️ Hapus Semua Data</button>`
   }</section>`;
 }
-function photoBox(){
-  const ph=db.baby.photo;
-  return `<div class="ph-prev">${ph?`<img alt="Foto" src="${ph}">`:`<span>${db.baby.sex==='Perempuan'?'👧':db.baby.sex==='Laki-laki'?'👦':'🐣'}</span>`}</div><div class="ph-btns"><button class="btn alt" type="button" onclick="$('#f-photo').click()">📷 ${ph?'Ganti foto':'Pilih foto'}</button>${ph?`<button class="btn alt" type="button" onclick="delPhoto()">Hapus</button>`:''}</div>`;
-}
-function refreshPhoto(){const b=$('#ph-box');if(b)b.innerHTML=photoBox();updateDynamicIsland()}
-function pickPhoto(inp){
-  const f=inp.files&&inp.files[0];
-  inp.value='';
-  /* dibatalkan / tidak ada file / bukan gambar: diam saja, ikon default tetap dipakai */
-  if(!f||!f.size||(f.type&&f.type.indexOf('image/')!==0))return;
-  const done=src=>{
-    try{
-      const S=320,c=document.createElement('canvas');c.width=S;c.height=S;
-      const x=c.getContext('2d'),w=src.naturalWidth||src.width,h=src.naturalHeight||src.height,m=Math.min(w,h);
-      if(!m)return;
-      x.drawImage(src,(w-m)/2,(h-m)/2,m,m,0,0,S,S);
-      db.baby.photo=c.toDataURL('image/jpeg',.82);
-      save();refreshPhoto();toast('Foto tersimpan');
-    }catch(e){}
+let editingGeminiKey=false;
+function captureProfilDraft(){
+  if(tab!=='profil')return null;
+  const pn=$('#pn'),pd=$('#pd'),ps=$('#ps'),pb=$('#pb'),pt=$('#pt'),pgk=$('#pgk');
+  return{
+    name:pn?pn.value:null,
+    dob:pd?pd.value:null,
+    sex:ps?ps.value:null,
+    bw:pb?pb.value:null,
+    target:pt?pt.value:null,
+    pgk:pgk?pgk.value:null
   };
-  const url=URL.createObjectURL(f),img=new Image();
-  img.onload=()=>{URL.revokeObjectURL(url);done(img)};
-  img.onerror=()=>{
-    URL.revokeObjectURL(url);
-    /* coba cara lain (mis. HEIC di browser tertentu); kalau tetap gagal, biarkan ikon default tanpa pesan */
-    if(window.createImageBitmap)createImageBitmap(f).then(done).catch(()=>{});
-  };
-  img.src=url;
 }
-function delPhoto(){delete db.baby.photo;save();refreshPhoto();toast('Foto dihapus')}
+function restoreProfilDraft(d){
+  if(!d||tab!=='profil')return;
+  if(d.name!==null&&$('#pn'))$('#pn').value=d.name;
+  if(d.dob!==null&&$('#pd')){
+    $('#pd').value=d.dob;
+    const l=$('#pd-lbl');
+    if(l){
+      if(d.dob){l.textContent=fd(d.dob,{day:'numeric',month:'short',year:'numeric'});l.parentElement.classList.remove('ph')}
+      else{l.textContent='Pilih tanggal lahir';l.parentElement.classList.add('ph')}
+    }
+  }
+  if(d.sex!==null&&$('#ps'))$('#ps').value=d.sex;
+  if(d.bw!==null&&$('#pb'))$('#pb').value=d.bw;
+  if(d.target!==null&&$('#pt'))$('#pt').value=d.target;
+  if(d.pgk!==null&&$('#pgk'))$('#pgk').value=d.pgk;
+}
+function openEditGeminiKey(){
+  editingGeminiKey=true;
+  const w=$('#gk-wrap');
+  if(w){
+    w.innerHTML=`<input id="pgk" type="password" value="${esc(db.baby.geminiKey||'')}" placeholder="AIzaSy...">`;
+    const inp=$('#pgk');
+    if(inp)inp.focus();
+  }
+}
+function clearGeminiKey(){
+  const draft=captureProfilDraft();
+  db.baby.geminiKey='';
+  editingGeminiKey=false;
+  alertAiCache={};
+  aiState={loading:false,period:'',text:'',err:'',openKey:false};
+  save();
+  renderKeepScroll();
+  restoreProfilDraft(draft);
+  toast('API Key dihapus');
+}
 function saveP(){
+  const td=iso(new Date());
+  const dobVal=($('#pd').value||'').trim();
+  if(dobVal&&dobVal>td){
+    toast('Tanggal lahir tidak boleh melebihi hari ini');
+    return;
+  }
+  const gkInp=$('#pgk');
+  const nextKey=gkInp?gkInp.value.trim():(db.baby.geminiKey||'');
   db.baby={
+    ...db.baby,
     name:$('#pn').value.trim(),
-    dob:$('#pd').value,
+    dob:dobVal,
     sex:$('#ps').value,
     bw:kg($('#pb').value)||'',
     target:num($('#pt').value)>0?String(Math.round(num($('#pt').value))):'',
-    photo:db.baby.photo||''
+    geminiKey:nextKey
   };
-  save();render();toast('Profil tersimpan');
+  delete db.baby.photo;
+  editingGeminiKey=false;
+  save();renderKeepScroll();toast('Profil tersimpan');
 }
 function exportJSON(){
   try{
     const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
     const a=document.createElement('a');
     const url=URL.createObjectURL(blob);
+    const slug=(db.baby.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'si-kecil';
     a.href=url;
-    a.download=`catatan-${(db.baby.name||'si-kecil').toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${iso(new Date())}.json`;
+    a.download=`catatan-${slug}-${iso(new Date())}.json`;
     a.style.display='none';document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     toast('Cadangan diunduh');
@@ -1210,8 +1605,19 @@ function importJSON(inp){
     try{
       const o=JSON.parse(r.result);
       if(!o||typeof o!=='object'||(!o.logs&&!o.baby&&!o.growth))throw 0;
+      const hasExisting=Object.keys(db.logs||{}).length>0||(db.growth||[]).length>0||Boolean((db.baby||{}).name);
+      if(hasExisting&&!window.confirm('Pulihkan data dari file ini? Data yang ada di perangkat saat ini akan diganti.')){
+        inp.value='';
+        return;
+      }
       db=normalizeDB(o);
-      save();render();toast('Data berhasil dipulihkan');
+      selP=null;selF='';
+      editingGeminiKey=false;
+      resetConfirm=false;
+      snz={m:0,p:0,t:0};
+      alertAiCache={};
+      aiState={loading:false,period:'',text:'',err:'',openKey:false};
+      save();renderKeepScroll();toast('Data berhasil dipulihkan');
     }catch(e){toast('File cadangan tidak valid')}
     inp.value='';
   };
@@ -1220,8 +1626,12 @@ function importJSON(inp){
 function wipeAll(){
   db={baby:{},logs:{},growth:[]};
   mem=db;
+  selP=null;selF='';
+  editingGeminiKey=false;
   resetConfirm=false;
   snz={m:0,p:0,t:0};
+  alertAiCache={};
+  aiState={loading:false,period:'',text:'',err:'',openKey:false};
   try{localStorage.removeItem(KEY)}catch(e){}
   save();render();toast('Semua data telah dihapus');
 }
@@ -1237,7 +1647,6 @@ function toggleDI(){
 document.addEventListener('click',e=>{if(diExp&&!e.target.closest('#di'))toggleDI()});
 let lastY=0,scrollTick=false;
 function syncBottomDock(){
-  /* menu bawah murni position:fixed; bottom:0 — tanpa offset JS agar tidak melayang */
   const nw=document.querySelector('.nav-wrap'),bb=document.querySelector('.bot-blur');
   if(nw)nw.style.transform='';
   if(bb)bb.style.transform='';
@@ -1256,7 +1665,6 @@ addEventListener('scroll',()=>{
   scrollTick=true;
   requestAnimationFrame(()=>{
     const y=scrollY,maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
-    /* abaikan mantulan (rubber-band) di atas/bawah halaman */
     if(y>=0&&y<=maxScroll){
       document.body.classList.toggle('is-scrolled',y>12);
       const nav=$('#nav'),di=$('#di'),dy=y-lastY;
@@ -1279,14 +1687,12 @@ addEventListener('scroll',()=>{
 
 function updateDynamicIsland(){
   const log=db.logs[cur]||{milk:[],pump:[]};
-  const mTot=sum(log.milk),pTot=sum(log.pump),tg=target();
+  const mTot=sum(log.milk),pTot=sum(log.pump),tg=cur===iso(new Date())?target():(log.tg||target());
   const pct=tg?Math.round(mTot/tg*100):0;
   const ok=tg>0&&mTot>=tg;
 
   const av=$('#di-av');
-  if(db.baby.photo){
-    if(!av.firstElementChild||av.firstElementChild.getAttribute('src')!==db.baby.photo)av.innerHTML='<img alt="" src="'+db.baby.photo+'">';
-  }else av.textContent=db.baby.sex==='Perempuan'?'👧':db.baby.sex==='Laki-laki'?'👦':'🐣';
+  av.textContent=db.baby.sex==='Perempuan'?'👧':db.baby.sex==='Laki-laki'?'👦':'🐣';
   $('#nm').textContent=db.baby.name||'Si Kecil';
   const a=age();
   $('#age').textContent=a||'Isi data di Profil';
@@ -1304,7 +1710,7 @@ function updateDynamicIsland(){
   $('#di-detail').innerHTML=`
     <div class="di-box"><small>🍼 Susu</small><b>${n(mTot)}${tg?'/'+n(tg):''}</b></div>
     <div class="di-box"><small>💧 Pump</small><b>${n(pTot)} ml</b></div>
-    <div class="di-box"><small>⚖️ Berat</small><b>${w?w+' kg':'–'}</b></div>`;
+    <div class="di-box"><small>⚖️ Berat</small><b>${w?fmtDec(w)+' kg':'–'}</b></div>`;
 }
 
 /* === 9. ALERTS, RENDER & THEME === */
@@ -1335,6 +1741,9 @@ const ALERT_MSGS={
   ]
 };
 const msgSeed=Math.floor(Math.random()*100);
+let alertAiCache={};
+let alertAiInFlight={};
+
 function pickMsg(k,nt){
   const arr=ALERT_MSGS[k]||[];
   if(!arr.length)return '';
@@ -1342,8 +1751,38 @@ function pickMsg(k,nt){
   return arr[idx];
 }
 
-let snz={m:0,p:0,t:0},alHTML='';
-function snoozeAlert(k){snz[k]=Date.now()+(k==='t'?2:4)*36e5;render()}
+function getAlertMsg(k,nt,contextText){
+  const key=(db.baby.geminiKey||'').trim();
+  const hourBucket=Math.floor(nt/3600000);
+  const cacheKey=k+':'+hourBucket+':'+(db.baby.name||'');
+  if(alertAiCache[cacheKey])return alertAiCache[cacheKey];
+  if(key&&!alertAiInFlight[cacheKey]){
+    alertAiInFlight[cacheKey]=true;
+    const kindLabel=k==='m'?'pengingat minum susu bayi':(k==='p'?'pengingat pumping ASI ibu':'pengingat target susu harian bayi belum tercapai');
+    const prompt=`Buat 1 kalimat pendek, ramah, dan natural dalam bahasa Indonesia santai ("ayang, dede...") untuk ${kindLabel}. Konteks: ${contextText}. Maksimal 12 kata, tanpa tanda kutip, tanpa emoji berlebihan.`;
+    (async()=>{
+      try{
+        const models=['gemini-3.8-flash','gemini-3.8-flash-lite','gemini-2.5-flash','gemini-2.0-flash'];
+        for(let i=0;i<models.length;i++){
+          try{
+            const raw=await callGeminiModel(models[i],key,prompt);
+            const clean=String(raw||'').replace(/^[\"'“”]+|[\"'“”]+$/g,'').replace(/\s+/g,' ').trim();
+            if(clean&&clean.length<=120){
+              alertAiCache[cacheKey]=clean;
+              refreshAlerts();
+              break;
+            }
+          }catch(_){}
+        }
+      }finally{
+        delete alertAiInFlight[cacheKey];
+      }
+    })();
+  }
+  return pickMsg(k,nt);
+}
+
+function snoozeAlert(k){snz[k]=Date.now()+(k==='t'?2:4)*36e5;renderKeepScroll()}
 function vAlerts(){
   const now=new Date(),nt=now.getTime(),td=iso(now),out=[];
   const at=(day,t)=>new Date(day+'T'+(/^\d\d:\d\d$/.test(t)?t:'00:00')+':00').getTime();
@@ -1351,21 +1790,29 @@ function vAlerts(){
     let last=0;
     Object.keys(db.logs).forEach(day=>{
       const L=db.logs[day];
-      if(L)(L[kind]||[]).forEach(x=>{const ts=at(day,x.t);if(ts<=nt&&ts>last)last=ts});
+      if(L)(L[kind]||[]).forEach(x=>{const ts=at(day,x.t);if(!isNaN(ts)&&ts<=nt&&ts>last)last=ts});
     });
     return last;
   };
   const row=(k,txt)=>`<div class="alert"><span class="ai">⚠️</span><div class="mq"><div class="mq-t" style="animation-duration:${Math.max(10,Math.round(txt.length*.22))}s"><span>${esc(txt)}</span><span>${esc(txt)}</span></div></div><button type="button" aria-label="Tutup" onclick="snoozeAlert('${k}')">✕</button></div>`;
 
   const lastMilk=lastTs('milk');
-  const dueMilk=lastMilk?(nt-lastMilk>=4*36e5):(now.getHours()>=7);
-  if(dueMilk&&nt>=snz.m)out.push(row('m',pickMsg('m',nt)));
+  const hasAnyMilk=Object.keys(db.logs).some(day=>(db.logs[day].milk||[]).length>0);
+  const dueMilk=lastMilk?(nt-lastMilk>=4*36e5):(hasAnyMilk&&now.getHours()>=7);
+  if(dueMilk&&nt>=snz.m){
+    const ctx=lastMilk?`sudah sekitar 4 jam+ sejak minum susu terakhir, usia ${age()||'bayi'}`:`pagi ini belum ada catatan susu, usia ${age()||'bayi'}`;
+    out.push(row('m',getAlertMsg('m',nt,ctx)));
+  }
 
   const lastPump=lastTs('pump');
-  if(lastPump&&nt-lastPump>=4*36e5&&nt>=snz.p)out.push(row('p',pickMsg('p',nt)));
+  if(lastPump&&nt-lastPump>=4*36e5&&nt>=snz.p){
+    out.push(row('p',getAlertMsg('p',nt,'sudah sekitar 4 jam+ sejak pumping terakhir')));
+  }
 
   const L=db.logs[td]||{},tg=target(),tot=sum(L.milk||[]);
-  if(now.getHours()>=18&&tg>0&&tot<tg&&nt>=snz.t)out.push(row('t',pickMsg('t',nt)));
+  if(now.getHours()>=18&&tg>0&&tot<tg&&nt>=snz.t){
+    out.push(row('t',getAlertMsg('t',nt,`susu hari ini ${tot} ml dari target ${tg} ml`)));
+  }
   return out.join('');
 }
 let lastToday=iso(new Date());
